@@ -15,6 +15,7 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 
 import { supabase } from '@/lib/supabase';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // ── Country data ──────────────────────────────────────────────────────────────
 const COUNTRIES = [
   { name: 'Colombia',        code: '+57',  flag: '🇨🇴', digits: 10, starts: ['3'] },
@@ -45,6 +46,7 @@ const COUNTRIES = [
 const DEFAULT_COUNTRY = COUNTRIES[0]; // Colombia
 
 export default function PhoneScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [selectedCountry, setSelectedCountry] = useState(DEFAULT_COUNTRY);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -129,7 +131,7 @@ export default function PhoneScreen() {
         behavior="padding"
       >
         <View style={styles.content}>
-          <Text style={styles.title}>¿Cuál es tu número de celular?</Text>
+          <Text style={styles.title}>{t('ob.cualCelular')}</Text>
 
           <View style={styles.phoneRow}>
             {/* Country selector button */}
@@ -148,7 +150,7 @@ export default function PhoneScreen() {
               style={[styles.phoneInput, isPhoneFocused && styles.phoneInputFocused]}
               value={phoneNumber}
               onChangeText={setPhoneNumber}
-              placeholder="Número de celular"
+              placeholder={t('ob.numeroCelular')}
               placeholderTextColor="rgba(136, 14, 79, 0.4)"
               keyboardType="phone-pad"
               maxLength={selectedCountry.digits}
@@ -173,7 +175,7 @@ export default function PhoneScreen() {
             activeOpacity={0.8}
           >
             <Text style={styles.continueButtonText}>
-              {checking ? 'Verificando...' : 'Continuar'}
+              {checking ? 'Verificando...' : t('ob.continuar')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -187,7 +189,7 @@ export default function PhoneScreen() {
       >
         <SafeAreaView style={styles.modalSafe}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Selecciona tu país</Text>
+            <Text style={styles.modalTitle}>{t('ob.seleccionaPais')}</Text>
             <TouchableOpacity onPress={() => { setShowCountryModal(false); setSearch(''); }}>
               <Text style={styles.modalClose}>✕</Text>
             </TouchableOpacity>
@@ -197,7 +199,7 @@ export default function PhoneScreen() {
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder="Buscar país o código..."
+            placeholder={t('ob.buscarPais')}
             placeholderTextColor="#999"
             autoCorrect={false}
           />
@@ -238,14 +240,14 @@ export default function PhoneScreen() {
       >
         <View style={styles.errorOverlay}>
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>⚠️ Número no disponible</Text>
+            <Text style={styles.errorTitle}>{t('ob.numeroNoDisponible')}</Text>
             <Text style={styles.errorMsg}>{errorMessage}</Text>
             {phoneAlreadyExists && (
               <TouchableOpacity
                 style={styles.errorLoginBtn}
                 onPress={() => { setShowErrorModal(false); router.replace('/login'); }}
               >
-                <Text style={styles.errorLoginBtnText}>Iniciar sesión</Text>
+                <Text style={styles.errorLoginBtnText}>{t('ob.iniciarSesion')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -253,7 +255,7 @@ export default function PhoneScreen() {
               onPress={() => setShowErrorModal(false)}
             >
               <Text style={[styles.errorBtnText, phoneAlreadyExists && styles.errorBtnSecondaryText]}>
-                {phoneAlreadyExists ? 'Usar otro número' : 'Entendido'}
+                {phoneAlreadyExists ? t('ob.usarOtroNumero') : 'Entendido'}
               </Text>
             </TouchableOpacity>
           </View>

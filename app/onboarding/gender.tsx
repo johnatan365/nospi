@@ -9,13 +9,15 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { MOSTRAR_INTERESADO_EN } from '@/constants/Preferencias';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 const GENDERS = [
-  { value: 'hombre', label: 'Hombre', emoji: '👨' },
-  { value: 'mujer', label: 'Mujer', emoji: '👩' },
-  { value: 'no binario', label: 'No binario', emoji: '🧑' },
+  { value: 'hombre', label: 'perfil.hombre', emoji: '👨' },
+  { value: 'mujer', label: 'perfil.mujer', emoji: '👩' },
+  { value: 'no binario', label: 'perfil.noBinario', emoji: '🧑' },
 ];
 
 export default function GenderScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
 
   const handleSelect = async (gender: string) => {
@@ -39,7 +41,7 @@ export default function GenderScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>¿Cuál es tu género?</Text>
+          <Text style={styles.title}>{t('ob.generoTitulo')}</Text>
           
           <View style={styles.optionsContainer}>
             {GENDERS.map((gender, index) => (
@@ -50,7 +52,7 @@ export default function GenderScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.optionEmoji}>{gender.emoji}</Text>
-                <Text style={styles.optionText}>{gender.label}</Text>
+                <Text style={styles.optionText}>{t(gender.label)}</Text>
               </TouchableOpacity>
             ))}
           </View>

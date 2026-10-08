@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { toque } from '@/lib/haptics';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // Supervision en vivo, pensada para mirar desde el telefono durante el evento.
 //
 // SOLO LEE. No entra a ningun chat ni escribe nada, asi que quien supervisa no
@@ -100,6 +101,7 @@ function diaBogota(d: Date): string {
 }
 
 export default function SupervisionScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 

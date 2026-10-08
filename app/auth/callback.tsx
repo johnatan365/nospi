@@ -13,7 +13,9 @@ import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function AuthCallback() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -171,7 +173,7 @@ export default function AuthCallback() {
       ) : (
         <>
           <ActivityIndicator size="large" color="#AD1457" />
-          <Text style={styles.loadingText}>Completando inicio de sesión...</Text>
+          <Text style={styles.loadingText}>{t('auth.completando')}</Text>
         </>
       )}
     </View>

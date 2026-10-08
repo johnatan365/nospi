@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { abrirMeet, obtenerMeetLink } from '@/lib/abrirMeet';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 type QuestionLevel = 'divertido' | 'sensual' | 'atrevido';
 // 'closing_intro': pantalla intermedia tras la última pregunta — el moderador
 // lee en voz alta que todos saquen el celular, se le agradece, y su botón
@@ -174,6 +175,7 @@ const LEVEL_THEMES: Record<QuestionLevel, LevelTheme> = {
 // Free phase uses the brand dark gradient
 
 export default function GameDynamicsScreen({ appointment, activeParticipants, onFinish }: GameDynamicsScreenProps) {
+  const { t } = useIdioma();
   const router = useRouter();
 
   // Estado inicial HIDRATADO desde la cita (que dinamica mantiene al dia por

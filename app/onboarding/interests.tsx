@@ -9,6 +9,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
+import { etiquetaGusto } from '@/constants/Gustos';
 // Common interests similar to Tinder
 const INTERESTS = [
   '🎵 Música', '🎬 Cine', '📚 Lectura', '✈️ Viajar', '🍳 Cocinar',
@@ -26,6 +28,7 @@ const PERSONALITY_TRAITS = [
 ];
 
 export default function InterestsScreen() {
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedTraits, setSelectedTraits] = useState<string[]>([]);
@@ -50,11 +53,11 @@ export default function InterestsScreen() {
 
   const handleContinue = async () => {
     if (selectedInterests.length < 3) {
-      Alert.alert('Selecciona al menos 3 gustos', 'Necesitamos conocer tus intereses para encontrar personas compatibles.');
+      Alert.alert(t('ob.min3Gustos'), t('ob.min3GustosMsg'));
       return;
     }
     if (selectedTraits.length < 3) {
-      Alert.alert('Selecciona al menos 3 rasgos', 'Necesitamos conocer tu personalidad para encontrar personas compatibles.');
+      Alert.alert(t('ob.min3Rasgos'), t('ob.min3RasgosMsg'));
       return;
     }
 
@@ -81,9 +84,9 @@ export default function InterestsScreen() {
     >
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
         <View style={styles.section}>
-          <Text style={styles.mainTitle}>Cuéntanos sobre ti</Text>
-          <Text style={styles.title}>¿Cuáles son tus gustos?</Text>
-          <Text style={styles.subtitle}>Selecciona al menos 3</Text>
+          <Text style={styles.mainTitle}>{t('ob.cuentanosDeTi')}</Text>
+          <Text style={styles.title}>{t('ob.cualesGustos')}</Text>
+          <Text style={styles.subtitle}>{t('ob.selecciona3')}</Text>
           <Text style={styles.counter}>{interestsCount} seleccionados</Text>
           
           <View style={styles.chipsContainer}>
@@ -97,7 +100,7 @@ export default function InterestsScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                    {interest}
+                    {etiquetaGusto(interest, idioma)}
                   </Text>
                 </TouchableOpacity>
               );
@@ -106,8 +109,8 @@ export default function InterestsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.title}>¿Cómo describirías tu personalidad?</Text>
-          <Text style={styles.subtitle}>Selecciona al menos 3</Text>
+          <Text style={styles.title}>{t('ob.comoDescribirias')}</Text>
+          <Text style={styles.subtitle}>{t('ob.selecciona3')}</Text>
           <Text style={styles.counter}>{traitsCount} seleccionados</Text>
           
           <View style={styles.chipsContainer}>
@@ -121,7 +124,7 @@ export default function InterestsScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                    {trait}
+                    {etiquetaGusto(trait, idioma)}
                   </Text>
                 </TouchableOpacity>
               );
@@ -135,7 +138,7 @@ export default function InterestsScreen() {
           disabled={!canContinue}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueButtonText}>Continuar</Text>
+          <Text style={styles.continueButtonText}>{t('ob.continuar')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </LinearGradient>

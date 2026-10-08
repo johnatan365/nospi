@@ -4,9 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // -----------------------------------------------------------------------------
 // MatchPopup: escucha en TIEMPO REAL la tabla event_matches y, cuando aparece un
-// match nuevo para el usuario actual, muestra un pop-up "¡Hiciste match!" con
+// match nuevo para el usuario actual, muestra un pop-up t('match.hicisteMatch') con
 // botón para abrir el chat 1 a 1. Cubre el caso en que la persona ya se salió de
 // la pantalla de calificar: igual se entera al instante mientras la app esté
 // abierta. (El push cubre el caso con la app cerrada / en segundo plano.)
@@ -20,6 +21,7 @@ interface MatchInfo { otherId: string; name: string; photo: string | null; conve
 interface Props { userId?: string | null; }
 
 export default function MatchPopup({ userId }: Props) {
+  const { t } = useIdioma();
   const router = useRouter();
   const [match, setMatch] = useState<MatchInfo | null>(null);
 
@@ -85,19 +87,19 @@ export default function MatchPopup({ userId }: Props) {
       <View style={styles.backdrop}>
         <LinearGradient colors={GRAD} style={styles.card} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
           <Text style={styles.boom}>💘</Text>
-          <Text style={styles.title}>¡Hiciste match!</Text>
+          <Text style={styles.title}>{t('match.hicisteMatch')}</Text>
           {match.photo ? (
             <Image source={{ uri: match.photo }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPh]}><Text style={styles.avatarTxt}>{initial(match.name)}</Text></View>
           )}
           <Text style={styles.name}>{match.name}</Text>
-          <Text style={styles.sub}>También quiere volver a coincidir contigo. ¡Escríbele! 💬</Text>
+          <Text style={styles.sub}>{t('match.escribele')}</Text>
           <TouchableOpacity style={styles.btn} onPress={openChat} activeOpacity={0.85}>
             <Text style={styles.btnTxt}>Escribirle</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.later} onPress={() => setMatch(null)} activeOpacity={0.7}>
-            <Text style={styles.laterTxt}>Ahora no</Text>
+            <Text style={styles.laterTxt}>{t('match.ahoraNo')}</Text>
           </TouchableOpacity>
         </LinearGradient>
       </View>

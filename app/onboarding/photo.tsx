@@ -9,7 +9,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function PhotoScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
@@ -17,7 +19,7 @@ export default function PhotoScreen() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (permissionResult.granted === false) {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar una foto.');
+      Alert.alert('Permiso requerido', t('ob.permisoGaleria'));
       return;
     }
 
@@ -36,7 +38,7 @@ export default function PhotoScreen() {
 
   const handleContinue = async () => {
     if (!photoUri) {
-      Alert.alert('Foto requerida', 'Por favor selecciona una foto de perfil.');
+      Alert.alert(t('ob.fotoRequerida'), t('ob.seleccionaFotoPerfil'));
       return;
     }
 
@@ -66,8 +68,8 @@ export default function PhotoScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>Añade tu foto de perfil</Text>
-          <Text style={styles.subtitle}>Esta será tu foto principal</Text>
+          <Text style={styles.title}>{t('ob.anadeFoto')}</Text>
+          <Text style={styles.subtitle}>{t('ob.fotoPrincipal')}</Text>
           
           <TouchableOpacity 
             style={styles.photoContainer}
@@ -79,7 +81,7 @@ export default function PhotoScreen() {
             ) : (
               <View style={styles.photoPlaceholder}>
                 <Text style={styles.photoPlaceholderIcon}>📷</Text>
-                <Text style={styles.photoPlaceholderText}>Seleccionar foto</Text>
+                <Text style={styles.photoPlaceholderText}>{t('ob.seleccionarFoto')}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -90,7 +92,7 @@ export default function PhotoScreen() {
             disabled={!photoUri}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={styles.continueButtonText}>{t('ob.continuar')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -98,7 +100,7 @@ export default function PhotoScreen() {
             onPress={handleSkip}
             activeOpacity={0.8}
           >
-            <Text style={styles.skipButtonText}>Ahora no</Text>
+            <Text style={styles.skipButtonText}>{t('ob.ahoraNo')}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -10,7 +10,9 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { moveAgeBound, validAgeRange, esRangoAbierto, RANGO_ABIERTO, EDAD_MIN, EDAD_MAX } from '@/utils/agePreferences';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function AgeRangeScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [ageRange, setAgeRange] = useState({ min: 25, max: 40 });
   // null = todavia no eligio. Obliga a tocar una de las dos, sin dar por hecho
@@ -82,7 +84,7 @@ export default function AgeRangeScreen() {
               alta que se tiene en cuenta pero no se garantiza -- porque con 6 a
               15 personas por evento no siempre se puede cuadrar, y prometerlo
               es lo que dejo a 312 personas esperando un aviso que no llegaba. */}
-          <Text style={styles.title}>¿Con qué edades te sentirías más cómodo?</Text>
+          <Text style={styles.title}>{t('ob.edadesComodo')}</Text>
           <Text style={styles.subtitle}>
             Lo tenemos en cuenta al armar las mesas, aunque no siempre se puede cuadrar.
           </Text>
@@ -97,8 +99,8 @@ export default function AgeRangeScreen() {
           >
             <Text style={styles.opcionMarca}>{leImporta === false ? '◉' : '○'}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.opcionTitulo}>La edad me da igual</Text>
-              <Text style={styles.opcionAyuda}>Me acomodo con cualquier grupo</Text>
+              <Text style={styles.opcionTitulo}>{t('ob.edadDaIgual')}</Text>
+              <Text style={styles.opcionAyuda}>{t('ob.cualquierGrupo')}</Text>
             </View>
           </TouchableOpacity>
 
@@ -112,8 +114,8 @@ export default function AgeRangeScreen() {
           >
             <Text style={styles.opcionMarca}>{leImporta === true ? '◉' : '○'}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.opcionTitulo}>Prefiero un rango</Text>
-              <Text style={styles.opcionAyuda}>Me siento mejor con edades parecidas</Text>
+              <Text style={styles.opcionTitulo}>{t('ob.prefieroRango')}</Text>
+              <Text style={styles.opcionAyuda}>{t('ob.edadesParecidas')}</Text>
             </View>
           </TouchableOpacity>
 
@@ -129,7 +131,7 @@ export default function AgeRangeScreen() {
               <View style={styles.sliderSection}>
                 <View style={styles.sliderRow}>
                   <View style={styles.sliderLabelContainer}>
-                    <Text style={styles.sliderLabel}>Mínimo</Text>
+                    <Text style={styles.sliderLabel}>{t('ob.minimo')}</Text>
                     <Text style={styles.sliderValue}>{minAgeText}</Text>
                   </View>
                   <Slider
@@ -137,7 +139,7 @@ export default function AgeRangeScreen() {
                     minimumValue={EDAD_MIN}
                     maximumValue={EDAD_MAX}
                     disabled={!ready || saving}
-                    accessibilityLabel="Edad mínima"
+                    accessibilityLabel={t('ob.edadMinima')}
                     step={1}
                     value={ageRange.min}
                     onValueChange={handleMinChange}
@@ -149,14 +151,14 @@ export default function AgeRangeScreen() {
 
                 <View style={styles.sliderRow}>
                   <View style={styles.sliderLabelContainer}>
-                    <Text style={styles.sliderLabel}>Máximo</Text>
+                    <Text style={styles.sliderLabel}>{t('ob.maximo')}</Text>
                     <Text style={styles.sliderValue}>{maxAgeText}</Text>
                   </View>
                   <Slider
                     style={styles.slider}
                     minimumValue={EDAD_MIN}
                     disabled={!ready || saving}
-                    accessibilityLabel="Edad máxima"
+                    accessibilityLabel={t('ob.edadMaxima')}
                     maximumValue={EDAD_MAX}
                     step={1}
                     value={ageRange.max}
@@ -185,7 +187,7 @@ export default function AgeRangeScreen() {
             onPress={handleContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>{saving ? 'Guardando…' : 'Continuar'}</Text>
+            <Text style={styles.continueButtonText}>{saving ? t('ob.guardando') : t('ob.continuar')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

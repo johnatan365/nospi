@@ -6,9 +6,11 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
 import CatchUpRatingScreen from '@/components/CatchUpRatingScreen';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 const FREE_PHASE_GRADIENT: [string, string, ...string[]] = ['#1a0010', '#880E4F', '#AD1457'];
 
 export default function CatchUpRatingRoute() {
+  const { t } = useIdioma();
   const { eventId } = useLocalSearchParams();
   const { user } = useSupabase();
 
@@ -37,11 +39,11 @@ export default function CatchUpRatingRoute() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <Stack.Screen options={{ headerShown: true, title: 'Cierre de la experiencia', headerBackTitle: 'Atrás' }} />
+        <Stack.Screen options={{ headerShown: true, title: t('cierre.titulo'), headerBackTitle: 'Atrás' }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FFFFFF" />
           {!user?.id && (
-            <Text style={styles.errorText}>Debes iniciar sesión para calificar.</Text>
+            <Text style={styles.errorText}>{t('cierre.debesIniciar')}</Text>
           )}
         </View>
       </LinearGradient>
@@ -50,7 +52,7 @@ export default function CatchUpRatingRoute() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Cierre de la experiencia', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{ headerShown: true, title: t('cierre.titulo'), headerBackTitle: 'Atrás' }} />
       <CatchUpRatingScreen eventId={resolvedEventId} currentUserId={user.id} eventType={eventType} />
     </>
   );

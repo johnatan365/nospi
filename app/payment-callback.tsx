@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { exito } from '@/lib/haptics';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
@@ -247,6 +248,7 @@ async function cleanupAsyncStorage(): Promise<void> {
 }
 
 export default function PaymentCallbackScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const localSearchParams = useLocalSearchParams();
   const isWeb = Platform.OS === 'web';
@@ -735,32 +737,32 @@ export default function PaymentCallbackScreen() {
             />
 
             <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>Siguiente paso:</Text>
+              <Text style={styles.instructionsTitle}>{t('cb.siguientePaso')}</Text>
 
               <View style={styles.stepContainer}>
                 <View style={styles.stepNumber}>
                   <Text style={styles.stepNumberText}>1</Text>
                 </View>
-                <Text style={styles.stepText}>Cierra esta ventana del navegador</Text>
+                <Text style={styles.stepText}>{t('cb.cierraVentana')}</Text>
               </View>
 
               <View style={styles.stepContainer}>
                 <View style={styles.stepNumber}>
                   <Text style={styles.stepNumberText}>2</Text>
                 </View>
-                <Text style={styles.stepText}>Regresa a la app de Nospi</Text>
+                <Text style={styles.stepText}>{t('cb.regresaApp')}</Text>
               </View>
 
               <View style={styles.stepContainer}>
                 <View style={styles.stepNumber}>
                   <Text style={styles.stepNumberText}>3</Text>
                 </View>
-                <Text style={styles.stepText}>Tu pago se procesará automáticamente</Text>
+                <Text style={styles.stepText}>{t('cb.pagoAutomatico')}</Text>
               </View>
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={styles.footerText}>Gracias por confiar en Nospi </Text>
+              <Text style={styles.footerText}>{t('cb.gracias')} </Text>
               <Text style={{ fontSize: 18, color: '#880E4F' }}>♥</Text>
             </View>
           </View>

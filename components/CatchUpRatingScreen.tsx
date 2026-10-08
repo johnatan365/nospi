@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { AvatarNospi } from '@/components/AvatarNospi';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // -----------------------------------------------------------------------------
 // Cierre del encuentro (reemplaza las estrellas 1-5):
 //   Paso 1 · AFINIDAD  -> ¿con quién te gustaría volver a coincidir? (privado)
@@ -72,6 +73,7 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number, fallback: T): Promise<T> 
 }
 
 export default function CatchUpRatingScreen({ eventId, currentUserId, eventType }: Props) {
+  const { t } = useIdioma();
   const router = useRouter();
   // Que se califica depende del tipo: en virtual no hay lugar ni comida.
   const items = useMemo(() => itemsForType(eventType), [eventType]);

@@ -8,7 +8,9 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function BirthdateScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [date, setDate] = useState(new Date(2000, 0, 1));
   const [showPicker, setShowPicker] = useState(false);
@@ -37,7 +39,7 @@ export default function BirthdateScreen() {
 
   const handleContinue = async () => {
     if (age < 18) {
-      Alert.alert('Edad mínima', 'Debes tener al menos 18 años para usar Nospi.');
+      Alert.alert(t('ob.edadMinima'), t('ob.debes18'));
       return;
     }
 
@@ -67,7 +69,7 @@ export default function BirthdateScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>¿Cuál es tu fecha de nacimiento?</Text>
+          <Text style={styles.title}>{t('ob.fechaNacimiento')}</Text>
           
           {Platform.OS === 'web' ? (
             <View style={styles.webDateContainer}>
@@ -109,7 +111,7 @@ export default function BirthdateScreen() {
               onPress={() => setShowPicker(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.dateDisplayLabel}>Fecha seleccionada:</Text>
+              <Text style={styles.dateDisplayLabel}>{t('ob.fechaSeleccionada')}</Text>
               <Text style={styles.dateDisplayValue}>{formattedDate}</Text>
             </TouchableOpacity>
           )}
@@ -131,19 +133,19 @@ export default function BirthdateScreen() {
                   style={styles.doneButton}
                   onPress={() => setShowPicker(false)}
                 >
-                  <Text style={styles.doneButtonText}>Listo</Text>
+                  <Text style={styles.doneButtonText}>{t('ob.listo')}</Text>
                 </TouchableOpacity>
               )}
             </View>
           )}
 
           <View style={styles.ageContainer}>
-            <Text style={styles.ageLabel}>Tu edad:</Text>
+            <Text style={styles.ageLabel}>{t('ob.tuEdad')}</Text>
             <Text style={styles.ageValue}>{ageText}</Text>
-            <Text style={styles.ageYears}>años</Text>
+            <Text style={styles.ageYears}>{t('ob.anios')}</Text>
           </View>
 
-          <Text style={styles.note}>Tu perfil muestra tu edad, no tu fecha de nacimiento</Text>
+          <Text style={styles.note}>{t('ob.perfilMuestraEdad')}</Text>
 
           <TouchableOpacity
             style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
@@ -151,7 +153,7 @@ export default function BirthdateScreen() {
             disabled={!canContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={styles.continueButtonText}>{t('ob.continuar')}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -12,14 +12,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function NameScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [name, setName] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
   const handleContinue = async () => {
     if (name.trim().length < 2) {
-      Alert.alert('Nombre requerido', 'Por favor ingresa tu nombre.');
+      Alert.alert(t('ob.nombreRequerido'), t('ob.ingresaNombre'));
       return;
     }
 
@@ -43,15 +45,15 @@ export default function NameScreen() {
         behavior="padding"
       >
         <View style={styles.content}>
-          <Text style={styles.title}>¿Cómo te llamas?</Text>
-          <Text style={styles.subtitle}>Así es como aparecerá en tu perfil</Text>
+          <Text style={styles.title}>{t('ob.comoTeLlamas')}</Text>
+          <Text style={styles.subtitle}>{t('ob.asiAparecera')}</Text>
           
           <View style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Tu nombre"
+              placeholder={t('ob.tuNombre')}
               placeholderTextColor="rgba(136, 14, 79, 0.4)"
               autoFocus
               maxLength={50}
@@ -68,7 +70,7 @@ export default function NameScreen() {
             disabled={!canContinue}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            <Text style={styles.continueButtonText}>{t('ob.continuar')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

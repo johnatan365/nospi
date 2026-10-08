@@ -14,11 +14,13 @@ import {
 } from '@/constants/Ciudades';
 import { registrarCiudadNoEncontrada } from '@/utils/ciudadNoEncontrada';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 const COUNTRIES = PAISES_NOSPI;
 
 type OpcionCiudad = { nombre: string; detalle: string };
 
 export default function LocationScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [country, setCountry] = useState('Colombia');
   // NO hay ciudad predeterminada a proposito: si el campo viene lleno, hay
@@ -75,7 +77,7 @@ export default function LocationScreen() {
 
   const handleContinue = async () => {
     if (!country || !city) {
-      Alert.alert('Ubicación requerida', 'Por favor selecciona tu país y tu ciudad.');
+      Alert.alert(t('ob.ubicacionRequerida'), t('ob.seleccionaPaisCiudad'));
       return;
     }
 
@@ -103,10 +105,10 @@ export default function LocationScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
-          <Text style={styles.title}>¿En qué país y ciudad te encuentras?</Text>
+          <Text style={styles.title}>{t('ob.enQuePais')}</Text>
 
           <View style={styles.pickerContainer}>
-            <Text style={styles.label}>País</Text>
+            <Text style={styles.label}>{t('ob.pais')}</Text>
             <TouchableOpacity
               style={styles.selectedValueDisplay}
               onPress={() => setShowCountryPicker(true)}
@@ -117,7 +119,7 @@ export default function LocationScreen() {
           </View>
 
           <View style={styles.pickerContainer}>
-            <Text style={styles.label}>Ciudad</Text>
+            <Text style={styles.label}>{t('ob.ciudad')}</Text>
             <TouchableOpacity
               style={[styles.selectedValueDisplay, !city && styles.selectedValueDisplayEmpty]}
               onPress={() => { setBusqueda(''); setShowCityPicker(true); }}
@@ -140,7 +142,7 @@ export default function LocationScreen() {
             disabled={!puedeSeguir}
           >
             <Text style={[styles.continueButtonText, !puedeSeguir && styles.continueButtonTextDisabled]}>
-              {puedeSeguir ? 'Continuar' : 'Elige tu ciudad para seguir'}
+              {puedeSeguir ? t('ob.continuar') : t('ob.eligeCiudad')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -156,12 +158,12 @@ export default function LocationScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecciona tu país</Text>
+              <Text style={styles.modalTitle}>{t('ob.seleccionaPais')}</Text>
               <TouchableOpacity
                 onPress={() => setShowCountryPicker(false)}
                 style={styles.modalCloseButton}
               >
-                <Text style={styles.modalCloseText}>Listo</Text>
+                <Text style={styles.modalCloseText}>{t('ob.listo')}</Text>
               </TouchableOpacity>
             </View>
             <Picker
@@ -199,19 +201,19 @@ export default function LocationScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.modalContentCity]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecciona tu ciudad</Text>
+              <Text style={styles.modalTitle}>{t('ob.seleccionaCiudad')}</Text>
               <TouchableOpacity
                 onPress={() => setShowCityPicker(false)}
                 style={styles.modalCloseButton}
               >
-                <Text style={styles.modalCloseText}>Cerrar</Text>
+                <Text style={styles.modalCloseText}>{t('comun.cerrar')}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.searchWrapper}>
               <TextInput
                 style={styles.searchInput}
-                placeholder="Escribe tu ciudad o municipio"
+                placeholder={t('ob.escribeCiudad')}
                 placeholderTextColor="#9CA3AF"
                 value={busqueda}
                 onChangeText={setBusqueda}
@@ -239,7 +241,7 @@ export default function LocationScreen() {
               )}
               ListEmptyComponent={(
                 <View style={styles.emptyWrapper}>
-                  <Text style={styles.emptyTitle}>No encontramos esa ciudad</Text>
+                  <Text style={styles.emptyTitle}>{t('ob.noEncontramosCiudad')}</Text>
                   <Text style={styles.emptyText}>
                     Revisa cómo la escribiste, o escoge la ciudad grande más cercana a ti.
                   </Text>

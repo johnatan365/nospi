@@ -9,6 +9,7 @@ import { PREFERENCIAS_POR_DEFECTO } from '@/constants/Notificaciones';
 import * as SplashScreen from 'expo-splash-screen';
 import { leerAtribucion } from '@/utils/atribucion';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // Lee los datos del onboarding desde localStorage (web) o AsyncStorage (nativo)
 async function readOnboardingData() {
   if (Platform.OS === 'web') {
@@ -57,6 +58,7 @@ async function hideSplash() {
 }
 
 export default function Index() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { user, loading } = useAuth();
   const { isPasswordRecovery } = useSupabase();
@@ -138,9 +140,9 @@ export default function Index() {
             console.error('Index: Error fetching profile:', profileError);
             await hideSplash();
             if (Platform.OS === 'web') {
-              window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              window.alert(t('comun.errorVerificarPerfil'));
             } else {
-              Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
+              Alert.alert(t('comun.error'), t('comun.errorVerificarPerfil'));
             }
             router.replace('/welcome');
             return;
@@ -197,9 +199,9 @@ export default function Index() {
                   console.error('Index: Error creating profile:', insertError);
                   await hideSplash();
                   if (Platform.OS === 'web') {
-                    window.alert('Error al crear tu perfil. Por favor intenta de nuevo.');
+                    window.alert(t('comun.errorCrearPerfil'));
                   } else {
-                    Alert.alert('Error', 'Error al crear tu perfil. Por favor intenta de nuevo.');
+                    Alert.alert(t('comun.error'), t('comun.errorCrearPerfil'));
                   }
                   await supabase.auth.signOut({ scope: 'local' });
                   router.replace('/welcome');
@@ -311,9 +313,9 @@ export default function Index() {
           console.error('Index: Unexpected error during profile check:', error);
           await hideSplash();
           if (Platform.OS === 'web') {
-            window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            window.alert(t('comun.errorInesperadoIntenta'));
           } else {
-            Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+            Alert.alert(t('comun.error'), t('comun.errorInesperadoIntenta'));
           }
           isRunning.current = false;
           router.replace('/welcome');

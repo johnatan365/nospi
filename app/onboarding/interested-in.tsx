@@ -8,13 +8,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackOnboardingStep } from '@/utils/onboardingTracker';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 const INTERESTS = [
-  { value: 'hombres', label: 'Hombres', emoji: '👨' },
-  { value: 'mujeres', label: 'Mujeres', emoji: '👩' },
-  { value: 'ambos', label: 'Ambos', emoji: '👥' },
+  { value: 'hombres', label: 'perfil.hombres', emoji: '👨' },
+  { value: 'mujeres', label: 'perfil.mujeres', emoji: '👩' },
+  { value: 'ambos', label: 'perfil.ambos', emoji: '👥' },
 ];
 
 export default function InterestedInScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
 
   const handleSelect = async (interest: string) => {
@@ -35,7 +37,7 @@ export default function InterestedInScreen() {
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>¿A quién te interesaría conocer en los encuentros grupales?</Text>
+          <Text style={styles.title}>{t('ob.interesadoTitulo')}</Text>
           
           <View style={styles.optionsContainer}>
             {INTERESTS.map((interest, index) => (
@@ -46,7 +48,7 @@ export default function InterestedInScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.optionEmoji}>{interest.emoji}</Text>
-                <Text style={styles.optionText}>{interest.label}</Text>
+                <Text style={styles.optionText}>{t(interest.label)}</Text>
               </TouchableOpacity>
             ))}
           </View>

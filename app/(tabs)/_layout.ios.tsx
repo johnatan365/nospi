@@ -5,6 +5,7 @@ import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { useUnreadChatCount } from '@/hooks/useUnreadChatCount';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // Rutas de las cinco pestanas, para precargarlas.
 const RUTAS_PESTANAS = [
   '/(tabs)/events',
@@ -15,6 +16,7 @@ const RUTAS_PESTANAS = [
 ];
 
 export default function TabLayout() {
+  const { t } = useIdioma();
   const { loading: supabaseLoading } = useSupabase();
   const unreadChats = useUnreadChatCount();
   const router = useRouter();
@@ -56,32 +58,32 @@ export default function TabLayout() {
       name: 'events',
       route: '/(tabs)/events',
       icon: 'star.fill',
-      label: 'Eventos',
+      label: t('tabs.eventos'),
     },
     {
       name: 'appointments',
       route: '/(tabs)/appointments',
       icon: 'bookmark.fill',
-      label: 'Citas',
+      label: t('tabs.citas'),
     },
     {
       name: 'dinamica',
       route: '/(tabs)/dinamica',
       icon: 'gamecontroller.fill',
-      label: 'Dinámica',
+      label: t('tabs.dinamica'),
     },
     {
       name: 'chats',
       route: '/(tabs)/chats',
       icon: 'bubble.left.and.bubble.right.fill',
-      label: 'Chat',
+      label: t('tabs.chat'),
       badge: unreadChats,
     },
     {
       name: 'profile',
       route: '/(tabs)/profile',
       icon: 'person.fill',
-      label: 'Perfil',
+      label: t('tabs.perfil'),
     },
   ];
 

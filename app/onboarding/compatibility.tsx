@@ -9,7 +9,9 @@ import { trackOnboardingStep } from '@/utils/onboardingTracker';
 import { supabase } from '@/lib/supabase';
 
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function CompatibilityScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const [spinValue] = useState(new Animated.Value(0));
   const [scaleValue] = useState(new Animated.Value(1));
@@ -111,12 +113,12 @@ export default function CompatibilityScreen() {
   // Community matches are not registrations for a particular event.
   const sinDato = compatibles === null;
   const cero = compatibles === 0;
-  const titular = sinDato ? 'Tu comunidad Nospi' : cero ? 'Tus coincidencias por edad' : 'Hay personas con quienes coincides por edad';
+  const titular = sinDato ? 'Tu comunidad Nospi' : cero ? t('ob.coincidenciasTitulo') : t('ob.hayPersonas');
   const mensaje = sinDato
     ? 'No pudimos consultar las coincidencias por edad en este momento. Puedes continuar con tu registro.'
     : cero
       ? 'Por ahora no encontramos coincidencias por edad en la comunidad con el rango que elegiste.'
-      : `En la comunidad Nospi hay ${compatibles} ${compatibles === 1 ? 'persona con quien coincides' : 'personas con quienes coincides'} según el rango de edad que elegiste.`;
+      : `En la comunidad Nospi hay ${compatibles} ${compatibles === 1 ? t('ob.personaCoincide') : t('ob.personasCoinciden')} según el rango de edad que elegiste.`;
 
   return (
     <LinearGradient
@@ -129,7 +131,7 @@ export default function CompatibilityScreen() {
         <View style={styles.content}>
           {!showResult ? (
             <React.Fragment>
-              <Text style={styles.title}>Explorando coincidencias en la comunidad Nospi…</Text>
+              <Text style={styles.title}>{t('ob.explorando')}</Text>
               
               <View style={styles.loaderContainer}>
                 <Animated.View
@@ -148,7 +150,7 @@ export default function CompatibilityScreen() {
 
               {/* "coincidencias perfectas" prometia de nuevo un resultado.
                   Ahora la pantalla describe lo que de verdad esta haciendo. */}
-              <Text style={styles.loadingText}>Revisando coincidencias por edad</Text>
+              <Text style={styles.loadingText}>{t('ob.revisando')}</Text>
             </React.Fragment>
           ) : (
             <React.Fragment>
@@ -156,7 +158,7 @@ export default function CompatibilityScreen() {
               {!sinDato && (
                 <View style={styles.resultCircle}>
                   <Text style={styles.percentageText}>{compatibles}</Text>
-                  <Text style={{ color: '#880E4F', fontSize: 16 }}>{compatibles === 1 ? 'persona' : 'personas'}</Text>
+                  <Text style={{ color: '#880E4F', fontSize: 16 }}>{compatibles === 1 ? t('ob.persona') : t('ob.personas')}</Text>
                 </View>
               )}
 
@@ -166,14 +168,14 @@ export default function CompatibilityScreen() {
                 <Text style={styles.messageText}>{mensaje}</Text>
               </View>
 
-              <Text style={styles.ctaText}>Las personas que conocerás dependerán de quiénes se inscriban en cada evento.</Text>
+              <Text style={styles.ctaText}>{t('ob.dependeQuienes')}</Text>
 
               <TouchableOpacity
                 style={styles.inscribeButton}
                 onPress={navigateToNext}
                 activeOpacity={0.8}
               >
-                <Text style={styles.inscribeButtonText}>Continuar</Text>
+                <Text style={styles.inscribeButtonText}>{t('ob.continuar')}</Text>
               </TouchableOpacity>
             </React.Fragment>
           )}

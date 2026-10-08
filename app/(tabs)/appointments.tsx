@@ -13,6 +13,7 @@ import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached, clearCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 const CACHE_KEY_PREFIX = 'cache_appointments';
 
 interface Appointment {
@@ -54,6 +55,7 @@ const CAJA_ICONO = {
 };
 
 export default function AppointmentsScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
     const params = useLocalSearchParams<{ openFilter?: string }>();
   const { user, loading: authLoading } = useSupabase();
@@ -268,7 +270,7 @@ export default function AppointmentsScreen() {
       const { data, error } = await supabase.rpc('get_event_group_conversation', { p_event_id: eventId });
       setOpeningChatFor(null);
       if (error || !data) {
-          Alert.alert('Chat no disponible', 'No encontramos el chat de este evento.');
+          Alert.alert(t('citas.chatNoDisponible'), t('citas.noEncontramosChat'));
           return;
       }
       router.push(`/chat/${data}` as any);
@@ -409,7 +411,7 @@ export default function AppointmentsScreen() {
       end={{ x: 0.5, y: 1 }}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>Mis Citas</Text>
+        <Text style={styles.title}>{t('citas.titulo')}</Text>
 
         {/* Filter Tabs */}
         <View style={styles.filterContainer}>
@@ -507,7 +509,7 @@ export default function AppointmentsScreen() {
                             onPress={() => router.push(`/catch-up-rating/${appointment.event!.id}`)}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.compactRateButtonText}>💘 Elegir con quién conecté</Text>
+                            <Text style={styles.compactRateButtonText}>{t('citas.elegirConQuien')}</Text>
                           </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -517,7 +519,7 @@ export default function AppointmentsScreen() {
                           disabled={openingChatFor === appointment.event.id}
                         >
                           <Text style={styles.compactChatButtonText}>
-                            {openingChatFor === appointment.event.id ? 'Abriendo...' : '💬 Chat'}
+                            {openingChatFor === appointment.event.id ? 'Abriendo...' : t('citas.chat')}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -610,7 +612,7 @@ export default function AppointmentsScreen() {
                   )}
 
                   {shouldShowLocationPlaceholder && (
-                    <Text style={styles.appointmentLocation}>Ubicación se revelará un día antes del evento</Text>
+                    <Text style={styles.appointmentLocation}>{t('citas.ubicacionUnDiaAntes')}</Text>
                   )}
 
                   {locationRevealed && !esVirtual && (
@@ -650,7 +652,7 @@ export default function AppointmentsScreen() {
                         style={styles.cancelButton}
                         onPress={() => handleCancelPress(appointment)}
                       >
-                        <Text style={styles.cancelButtonText}>Cancelar Cita</Text>
+                        <Text style={styles.cancelButtonText}>{t('citas.cancelarCita')}</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -687,7 +689,7 @@ export default function AppointmentsScreen() {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>¿Cancelar Cita?</Text>
+              <Text style={styles.modalTitle}>{t('citas.cancelarCitaPregunta')}</Text>
               {appointmentToCancel && appointmentToCancel.event && (() => {
                 if (appointmentToCancel.payment_method === 'subscription') {
                   return (
@@ -720,13 +722,13 @@ export default function AppointmentsScreen() {
                   style={[styles.modalButton, styles.modalButtonSecondary]}
                   onPress={() => setShowCancelModal(false)}
                 >
-                  <Text style={styles.modalButtonTextSecondary}>No, mantener</Text>
+                  <Text style={styles.modalButtonTextSecondary}>{t('citas.noMantener')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalButtonPrimary]}
                   onPress={confirmCancel}
                 >
-                  <Text style={styles.modalButtonTextPrimary}>Sí, cancelar</Text>
+                  <Text style={styles.modalButtonTextPrimary}>{t('citas.siCancelar')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -748,7 +750,7 @@ export default function AppointmentsScreen() {
                 style={{ backgroundColor: nospiColors.purpleDark, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%' }}
                 onPress={() => setShowPaymentSuccessModal(false)}
               >
-                <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>Ver mi cita</Text>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>{t('citas.verMiCita')}</Text>
               </TouchableOpacity>
             </View>
           </View>

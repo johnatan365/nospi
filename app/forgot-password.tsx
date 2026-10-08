@@ -21,7 +21,9 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { nospiColors } from '@/constants/Colors';
 import { supabaseRecovery } from '@/lib/supabase';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function ForgotPasswordScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -99,7 +101,7 @@ export default function ForgotPasswordScreen() {
                   <View style={styles.successIconWrap}>
                     <Ionicons name="mail-outline" size={40} color={nospiColors.white} />
                   </View>
-                  <Text style={styles.title}>Revisa tu correo</Text>
+                  <Text style={styles.title}>{t('pw.revisaCorreo')}</Text>
                   <Text style={styles.subtitle}>
                     Si {email.trim()} tiene una cuenta en Nospi, te enviamos un link para restablecer tu
                     contraseña. Revisa también la carpeta de spam.
@@ -110,12 +112,12 @@ export default function ForgotPasswordScreen() {
                     onPress={() => router.replace('/login')}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.submitButtonText}>Volver a iniciar sesión</Text>
+                    <Text style={styles.submitButtonText}>{t('pw.volverIniciar')}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <>
-                  <Text style={styles.title}>¿Olvidaste tu contraseña?</Text>
+                  <Text style={styles.title}>{t('pw.olvidaste')}</Text>
                   <Text style={styles.subtitle}>
                     Ingresa tu email y te enviamos un link para crear una nueva contraseña.
                   </Text>
@@ -153,7 +155,7 @@ export default function ForgotPasswordScreen() {
                     {submitting ? (
                       <ActivityIndicator color={nospiColors.white} />
                     ) : (
-                      <Text style={styles.submitButtonText}>Enviar link</Text>
+                      <Text style={styles.submitButtonText}>{t('pw.enviarLink')}</Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -165,7 +167,7 @@ export default function ForgotPasswordScreen() {
                 disabled={submitting}
                 activeOpacity={0.7}
               >
-                <Text style={styles.backText}>Volver</Text>
+                <Text style={styles.backText}>{t('pw.volver')}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

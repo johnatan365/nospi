@@ -274,7 +274,7 @@ export default function EventsScreen() {
       ) : (
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.title}>{t('eventos.titulo')}</Text>
-          <Text style={styles.subtitle}>Elige el evento al que quieres asistir</Text>
+          <Text style={styles.subtitle}>{t('eventos.eligeEvento')}</Text>
 
           {/* La ciudad se muestra siempre, aunque no haya nada que mostrar: si
               alguien se equivoco de ciudad al registrarse, aqui entiende por
@@ -286,7 +286,7 @@ export default function EventsScreen() {
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/profile')}
               activeOpacity={0.7}
-              accessibilityLabel="Cambiar mi ciudad en el perfil"
+              accessibilityLabel={t('eventos.cambiarCiudad')}
             >
               <Text style={styles.cityBannerLink}>
                 {ciudadPerfil ? t('eventos.cambiarCiudad') : t('eventos.elegirCiudad')}

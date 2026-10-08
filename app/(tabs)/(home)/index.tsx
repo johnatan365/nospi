@@ -6,7 +6,9 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function Index() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { user, loading } = useSupabase();
   const [initialCheckDone, setInitialCheckDone] = useState(false);
@@ -33,9 +35,9 @@ export default function Index() {
               console.error('Index: Error checking profile:', profileError);
               
               if (Platform.OS === 'web') {
-                window.alert('Error al verificar tu perfil. Por favor, intenta de nuevo.');
+                window.alert(t('comun.errorVerificarPerfil'));
               } else {
-                Alert.alert('Error', 'Error al verificar tu perfil. Por favor, intenta de nuevo.');
+                Alert.alert(t('comun.error'), t('comun.errorVerificarPerfil'));
               }
               
               await supabase.auth.signOut({ scope: 'local' });
@@ -98,9 +100,9 @@ export default function Index() {
             console.error('Index: Unexpected error during profile check:', error);
             
             if (Platform.OS === 'web') {
-              window.alert('Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+              window.alert(t('comun.errorInesperadoIntenta'));
             } else {
-              Alert.alert('Error', 'Ocurrió un error inesperado. Por favor, intenta de nuevo.');
+              Alert.alert(t('comun.error'), t('comun.errorInesperadoIntenta'));
             }
             
             await supabase.auth.signOut({ scope: 'local' });

@@ -19,6 +19,7 @@ import * as Notifications from 'expo-notifications';
 import { Linking } from 'react-native';
 import { registerPushToken } from '@/hooks/usePushNotifications';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 interface ConversationRow {
   conversation_id: string;
   conv_type: 'event_group' | 'direct' | 'channel_global' | 'channel_event' | 'community';
@@ -114,6 +115,7 @@ function getChatLockInfo(item: ConversationRow): { locked: boolean; unlockLabel:
 type ChatFilter = 'grupos' | 'directos' | 'canales';
 
 export default function ChatsScreen() {
+  const { t } = useIdioma();
   const { user } = useSupabase();
   const router = useRouter();
   const [conversationsRaw, setConversations] = useState<ConversationRow[]>([]);
@@ -474,7 +476,7 @@ export default function ChatsScreen() {
         <Text style={styles.title}>Chat</Text>
 
         <View style={styles.filterRow}>
-          {/* Con el tercer filtro, "Mensajes de grupo" no cabe en un tercio de
+          {/* Con el tercer filtro, t('chats.mensajesGrupo') no cabe en un tercio de
               la pantalla y el texto se sale del recuadro. Con dos pestanas si
               cabe, asi que se conservan los nombres largos. */}
           <TouchableOpacity
@@ -486,7 +488,7 @@ export default function ChatsScreen() {
               numberOfLines={1}
               style={[styles.filterTabText, filter === 'grupos' && styles.filterTabTextActive]}
             >
-              {hayCanales ? 'Grupos' : 'Mensajes de grupo'}
+              {hayCanales ? 'Grupos' : t('chats.mensajesGrupo')}
             </Text>
             {groupUnread > 0 && (
               <View style={styles.filterBadge}>
@@ -504,7 +506,7 @@ export default function ChatsScreen() {
               numberOfLines={1}
               style={[styles.filterTabText, filter === 'directos' && styles.filterTabTextActive]}
             >
-              {hayCanales ? 'Directos' : 'Mensajes 1-1'}
+              {hayCanales ? 'Directos' : t('chats.mensajes11')}
             </Text>
             {directUnread > 0 && (
               <View style={styles.filterBadge}>
@@ -569,7 +571,7 @@ export default function ChatsScreen() {
               activeOpacity={0.8}
               onPress={() => setComoSeAbren((v) => !v)}
             >
-              <Text style={styles.comoPregunta}>¿Cómo se abren los chats 1-1?</Text>
+              <Text style={styles.comoPregunta}>{t('chats.comoSeAbren')}</Text>
               <Text style={styles.comoFlecha}>{comoSeAbren ? '▴' : '▾'}</Text>
             </TouchableOpacity>
             {comoSeAbren && (
@@ -664,9 +666,9 @@ export default function ChatsScreen() {
                   activeOpacity={locked && !esComunidadBloqueada && !esSinAsistencia ? 1 : 0.7}
                   onPress={() => {
                     if (esSinAsistencia) {
-                      const msg = 'Este chat se abre cuando confirmas tu asistencia en el evento.';
+                      const msg = t('chats.seAbreAlConfirmar');
                       if (Platform.OS === 'web') window.alert(msg);
-                      else Alert.alert('Chat bloqueado', msg);
+                      else Alert.alert(t('chats.chatBloqueado'), msg);
                       return;
                     }
                     if (esComunidadBloqueada) {

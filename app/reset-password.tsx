@@ -21,12 +21,14 @@ import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // Pantalla a la que auth/callback.tsx redirige cuando el link que el usuario
 // clickeó en su correo es de tipo "recovery" (olvidé mi contraseña). Para
 // cuando llegamos acá, Supabase ya estableció una sesión temporal a partir
 // de los tokens del link — solo falta pedir la nueva contraseña y llamar a
 // supabase.auth.updateUser().
 export default function ResetPasswordScreen() {
+  const { t } = useIdioma();
   const router = useRouter();
   const { clearPasswordRecovery } = useSupabase();
 
@@ -75,11 +77,11 @@ export default function ResetPasswordScreen() {
         // cualquier error (incluida una contraseña rechazada por la política)
         // decia "el link expiro", y la persona pedia links nuevos en circulos.
         const m = (updateError.message || '').toLowerCase();
-        let friendly = 'No pudimos actualizar tu contraseña. Intenta de nuevo.';
+        let friendly = t('pw.noActualizo');
         if (m.includes('different') || m.includes('same as')) {
-          friendly = 'La nueva contraseña debe ser diferente a la anterior.';
+          friendly = t('pw.debeSerDiferente');
         } else if (m.includes('at least') || m.includes('should be') || m.includes('length') || m.includes('short') || m.includes('should contain') || m.includes('weak') || m.includes('character of each')) {
-          friendly = 'Esa contraseña no cumple los requisitos. Usa al menos 8 caracteres.';
+          friendly = t('pw.noCumple');
         } else if (m.includes('expired') || m.includes('invalid') || m.includes('token') || m.includes('session') || m.includes('missing') || m.includes('otp')) {
           friendly = 'Este enlace ya venció o se usó. Vuelve a "¿Olvidaste tu contraseña?" y solicita uno nuevo.';
         }
@@ -94,7 +96,7 @@ export default function ResetPasswordScreen() {
       }, 1800);
     } catch (err: any) {
       console.error('[ResetPassword] Unexpected error:', err);
-      setError('No pudimos actualizar tu contraseña. Intenta de nuevo.');
+      setError(t('pw.noActualizo'));
     } finally {
       setSubmitting(false);
     }
@@ -131,14 +133,14 @@ export default function ResetPasswordScreen() {
                   <View style={styles.successIconWrap}>
                     <Ionicons name="alert-circle-outline" size={40} color={nospiColors.white} />
                   </View>
-                  <Text style={styles.title}>Este link ya no es válido</Text>
+                  <Text style={styles.title}>{t('pw.linkNoValido')}</Text>
                   <Text style={styles.subtitle}>Puede haber expirado o ya haberse usado. Solicita uno nuevo desde la pantalla de inicio de sesión.</Text>
                   <TouchableOpacity
                     style={styles.submitButton}
                     onPress={() => router.replace('/forgot-password')}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.submitButtonText}>Solicitar nuevo link</Text>
+                    <Text style={styles.submitButtonText}>{t('pw.solicitarNuevo')}</Text>
                   </TouchableOpacity>
                 </>
               ) : done ? (
@@ -146,13 +148,13 @@ export default function ResetPasswordScreen() {
                   <View style={styles.successIconWrap}>
                     <Ionicons name="checkmark-circle-outline" size={40} color={nospiColors.white} />
                   </View>
-                  <Text style={styles.title}>¡Listo!</Text>
-                  <Text style={styles.subtitle}>Tu contraseña fue actualizada. Ya puedes usar Nospi.</Text>
+                  <Text style={styles.title}>{t('pw.listo')}</Text>
+                  <Text style={styles.subtitle}>{t('pw.actualizada')}</Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.title}>Crea una nueva contraseña</Text>
-                  <Text style={styles.subtitle}>Elige una contraseña para tu cuenta de Nospi (mínimo 8 caracteres).</Text>
+                  <Text style={styles.title}>{t('pw.creaNueva')}</Text>
+                  <Text style={styles.subtitle}>{t('pw.eligeContrasena')}</Text>
 
                   {error ? (
                     <View style={styles.errorContainer}>
@@ -166,7 +168,7 @@ export default function ResetPasswordScreen() {
                       <MaterialIcons name="lock" size={20} color="#999" style={styles.inputIcon} />
                       <TextInput
                         style={styles.input}
-                        placeholder="Nueva contraseña"
+                        placeholder={t('pw.nuevaContrasena')}
                         placeholderTextColor="#999"
                         value={password}
                         onChangeText={setPassword}
@@ -188,7 +190,7 @@ export default function ResetPasswordScreen() {
                       <MaterialIcons name="lock-outline" size={20} color="#999" style={styles.inputIcon} />
                       <TextInput
                         style={styles.input}
-                        placeholder="Confirma tu contraseña"
+                        placeholder={t('pw.confirmaContrasena')}
                         placeholderTextColor="#999"
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
@@ -209,7 +211,7 @@ export default function ResetPasswordScreen() {
                     {submitting ? (
                       <ActivityIndicator color={nospiColors.white} />
                     ) : (
-                      <Text style={styles.submitButtonText}>Guardar contraseña</Text>
+                      <Text style={styles.submitButtonText}>{t('pw.guardarContrasena')}</Text>
                     )}
                   </TouchableOpacity>
                 </>

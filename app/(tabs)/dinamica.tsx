@@ -21,6 +21,7 @@ import { getCached, getCachedEntry, setCached, clearCached } from '@/utils/cache
 import { abrirMeet, obtenerMeetLink } from '@/lib/abrirMeet';
 import { formatTimeAmPm } from '@/utils/formatTime';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 // Clave legacy (global, compartida entre cuentas). Se conserva solo para
 // limpiarla una vez y que no quede "pegado" el evento de otra cuenta.
 const CACHE_KEY_LEGACY = 'cache_dinamica';
@@ -158,6 +159,7 @@ const CAJA_ICONO = {
 };
 
 export default function DinamicaScreen() {
+  const { t } = useIdioma();
   // Esta pantalla no tiene cabecera: el degradado llega hasta arriba del todo.
   // Sin reservar el alto de la barra de estado, el titulo quedaba pegado al
   // reloj y a la muesca del telefono. Pasa en las OCHO pantallas del archivo,

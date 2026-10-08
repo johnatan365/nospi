@@ -4,14 +4,16 @@ import { View, Text, StyleSheet } from 'react-native';
 import React from 'react';
 import { nospiColors } from '@/constants/Colors';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function NotFoundScreen() {
+  const { t } = useIdioma();
   return (
     <React.Fragment>
       <Stack.Screen options={{ title: 'Oops!' }} />
       <View style={styles.container}>
-        <Text style={styles.title}>Esta pantalla no existe.</Text>
+        <Text style={styles.title}>{t('nf.noExiste')}</Text>
         <Link href="/welcome" style={styles.link}>
-          <Text style={styles.linkText}>Ir a la pantalla de inicio</Text>
+          <Text style={styles.linkText}>{t('nf.irInicio')}</Text>
         </Link>
       </View>
     </React.Fragment>
