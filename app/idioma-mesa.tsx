@@ -118,8 +118,13 @@ export default function IdiomaMesaScreen() {
   ];
 
   const opcionesZona = [
-    { valor: 'poblado', etiqueta: t('zona.poblado'), sub: t('zona.pobladoSub') },
-    { valor: 'laureles', etiqueta: t('zona.laureles'), sub: t('zona.laurelesSub') },
+    // Sin subtitulo: "La mayoria de las cenas" y "Cafes y bolos" describian lo
+    // que HAY hoy en cada zona, y eso envejece solo -- en cuanto cambie la
+    // programacion la pantalla miente. La pregunta es donde le queda bien a la
+    // persona, no que se hace en cada sitio. Las claves zona.pobladoSub y
+    // zona.laurelesSub se dejan en Textos.ts por si se quieren recuperar.
+    { valor: 'poblado', etiqueta: t('zona.poblado') },
+    { valor: 'laureles', etiqueta: t('zona.laureles') },
     // Envigado salio de la lista: quedan solo las dos zonas donde de verdad hay
     // eventos. Quien quiera otra la escribe en "Otra", que es el dato que sirve
     // para decidir donde abrir. El texto 'zona.envigado' se deja en Textos.ts a
