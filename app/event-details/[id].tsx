@@ -39,6 +39,9 @@ interface Event {
   ocultar_ciudad?: boolean;
   description: string;
   description_en?: string | null;
+  /** Condicion del lugar que hay que aceptar antes de reservar. Ver abajo. */
+  aviso_consumo?: string | null;
+  aviso_consumo_en?: string | null;
   name_en?: string | null;
   type: string;
   date: string | null;
@@ -94,6 +97,22 @@ export default function EventDetailsScreen() {
     return () => clearInterval(t);
   }, []);
   const requiresWaiver = (t: string | undefined) => t === 'caminata' || t === 'bolos';
+
+  // Aviso propio de ESTE evento, no de su tipo.
+  //
+  // El check de arriba va por tipo --toda caminata exonera, todo bolos avisa de
+  // la pista-- y eso no sirve cuando la condicion es de un sitio concreto: el
+  // bar de la cena del 15 pide consumo minimo de $150.000, y atarlo al tipo
+  // 'bar' se lo pondria a todos los bares. Por eso vive en el evento, en
+  // events.aviso_consumo, y se edita desde el admin.
+  //
+  // Si falta la version en ingles se muestra la de espanol: es mejor leerlo en
+  // el idioma equivocado que aceptar una casilla vacia. OJO: hoy ese campo se
+  // escribe a mano, traducir-contenido todavia no lo cubre.
+  const avisoDelEvento = (
+    (idioma === 'en' ? (event?.aviso_consumo_en || event?.aviso_consumo) : event?.aviso_consumo) || ''
+  ).trim();
+  const exigeConfirmacion = requiresWaiver(event?.type) || !!avisoDelEvento;
 
   const loadEvent = useCallback(async () => {
     try {
@@ -278,11 +297,13 @@ export default function EventDetailsScreen() {
     // soporte el 4 de octubre de 2026 diciendo "no me lleva a transferir o
     // gestionar el tramite"; nunca habia llegado a la pasarela. Ahora el boton
     // siempre responde y dice que falta marcar la casilla.
-    if (requiresWaiver(event?.type) && !waiverAccepted) {
+    if (exigeConfirmacion && !waiverAccepted) {
       aviso();
-      const msg = event?.type === 'bolos'
-        ? t('detalle.marcaCasillaBolos')
-        : t('detalle.marcaCasillaGeneral');
+      const msg = avisoDelEvento
+        ? t('detalle.marcaCasillaGeneral')
+        : event?.type === 'bolos'
+          ? t('detalle.marcaCasillaBolos')
+          : t('detalle.marcaCasillaGeneral');
       if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert(t('comun.faltaUnPaso'), msg); }
       return;
     }
@@ -618,7 +639,7 @@ export default function EventDetailsScreen() {
               )}
               <Text style={styles.question}>{t('detalle.deseasAsistir')}</Text>
 
-              {requiresWaiver(event.type) && (
+              {exigeConfirmacion && (
                 <TouchableOpacity
                   style={styles.waiverRow}
                   onPress={() => setWaiverAccepted(prev => !prev)}
@@ -628,9 +649,11 @@ export default function EventDetailsScreen() {
                     {waiverAccepted && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                   <Text style={styles.waiverText}>
-                    {event.type === 'bolos'
-                      ? t('detalle.aceptoBolos')
-                      : t('detalle.aceptoGeneral')}
+                    {avisoDelEvento
+                      ? avisoDelEvento
+                      : event.type === 'bolos'
+                        ? t('detalle.aceptoBolos')
+                        : t('detalle.aceptoGeneral')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -638,7 +661,7 @@ export default function EventDetailsScreen() {
               <TouchableOpacity
                 style={[
                   styles.confirmButton,
-                  (confirming || (requiresWaiver(event.type) && !waiverAccepted)) && styles.confirmButtonDisabled,
+                  (confirming || (exigeConfirmacion && !waiverAccepted)) && styles.confirmButtonDisabled,
                 ]}
                 onPress={handleConfirm}
                 // Solo `confirming` bloquea el toque. Si tambien bloqueara por la
