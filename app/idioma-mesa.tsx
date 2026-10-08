@@ -69,8 +69,13 @@ export default function IdiomaMesaScreen() {
     });
   };
 
+  // Si marco "Otra" y no escribio nada, el dato no sirve: esa opcion existe
+  // precisamente para saber CUAL zona. Se bloquea el Continuar.
+  const faltaZonaOtra = esPresencial && zonas.includes('otra') && zonaOtra.trim().length === 0;
+  const puedeContinuar = idiomas.length > 0 && !faltaZonaOtra;
+
   const continuar = async () => {
-    if (idiomas.length === 0) {
+    if (!puedeContinuar) {
       aviso();
       return;
     }
@@ -192,16 +197,19 @@ export default function IdiomaMesaScreen() {
           )}
 
           <TouchableOpacity
-            style={[estilos.boton, idiomas.length === 0 && estilos.botonApagado]}
+            style={[estilos.boton, !puedeContinuar && estilos.botonApagado]}
             onPress={continuar}
             activeOpacity={0.85}
-            disabled={idiomas.length === 0}
+            disabled={!puedeContinuar}
           >
             <Text style={estilos.botonTexto}>{t('comun.continuar')}</Text>
           </TouchableOpacity>
 
           {idiomas.length === 0 && (
             <Text style={estilos.faltaEscoger}>{t('mesaIdioma.escogeUno')}</Text>
+          )}
+          {idiomas.length > 0 && faltaZonaOtra && (
+            <Text style={estilos.faltaEscoger}>{t('zona.escribeCual')}</Text>
           )}
         </View>
       </ScrollView>

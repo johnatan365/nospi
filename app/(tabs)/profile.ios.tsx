@@ -798,10 +798,10 @@ export default function ProfileScreen() {
   const tieneFrase = !!(profile.bio || '').trim();
   const genderText = profile.gender === 'hombre' ? 'Hombre' : profile.gender === 'mujer' ? 'Mujer' : 'No binario';
   const interestedInText = profile.interested_in === 'hombres' ? 'Hombres' : profile.interested_in === 'mujeres' ? 'Mujeres' : 'Ambos';
-  const ageRangeText = `${profile.age_range_min}–${profile.age_range_max} años`;
+  const ageRangeText = t('perfil.rangoAnios', { min: profile.age_range_min, max: profile.age_range_max });
   const locationText = `${profile.city}, ${profile.country}`;
   const availableCities = CITIES_BY_COUNTRY[editCountry] || [];
-  const editAgeRangeText = `${editAgeRangeMin} - ${editAgeRangeMax} años`;
+  const editAgeRangeText = t('perfil.rangoAniosEdit', { min: editAgeRangeMin, max: editAgeRangeMax });
   const editMinAgeText = editAgeRangeMin.toString();
   const editMaxAgeText = editAgeRangeMax.toString();
   const phoneCountryFlag = editPhoneCountry.flag;
@@ -842,7 +842,7 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
           <Text style={styles.name}>{profile.name}</Text>
-          <Text style={styles.age}>{profile.age} años</Text>
+          <Text style={styles.age}>{t('perfil.anios', { n: profile.age })}</Text>
 
           {/* La frase va aqui, pegada a la foto, y no escondida dentro de
               "Editar perfil".
@@ -859,7 +859,7 @@ export default function ProfileScreen() {
             {tieneFrase ? (
               <>
                 <Text style={styles.fraseTexto} numberOfLines={3}>{profile.bio}</Text>
-                <Text style={styles.fraseEditar}>Tocar para editar</Text>
+                <Text style={styles.fraseEditar}>{t('perfil.tocarParaEditar')}</Text>
               </>
             ) : (
               <>

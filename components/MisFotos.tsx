@@ -11,6 +11,7 @@ import {
   FotoPerfil, MAX_FOTOS, LimiteFotosError, FotoVaciaError,
 } from '@/lib/fotosPerfil';
 import { avatarPorGenero } from '@/components/AvatarNospi';
+import { useIdioma } from '@/contexts/IdiomaContext';
 
 // La rejilla de "Mis fotos" del perfil.
 //
@@ -46,6 +47,7 @@ export function MisFotos({
   /** Se apaga cuando la rejilla va dentro de la hoja, que ya trae su propio titulo. */
   conEncabezado?: boolean;
 }) {
+  const { t } = useIdioma();
   const [fotos, setFotos] = useState<FotoPerfil[]>([]);
   const [cargando, setCargando] = useState(true);
   const [ocupado, setOcupado] = useState(false);
@@ -68,13 +70,13 @@ export function MisFotos({
 
   const elegirYSubir = async () => {
     if (fotos.length >= MAX_FOTOS) {
-      avisar('Ya tienes 6 fotos', 'Quita una para poder agregar otra.');
+      avisar(t('fotos.yaTienesTitulo', { max: MAX_FOTOS }), t('fotos.yaTienes'));
       return;
     }
 
     const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permiso.granted) {
-      avisar('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos.');
+      avisar(t('fotos.permisoTitulo'), t('fotos.permiso'));
       return;
     }
 
@@ -94,9 +96,9 @@ export function MisFotos({
       onCambio?.(lista[0]?.url ?? null, lista.length);
     } catch (e) {
       if (e instanceof FotoVaciaError || e instanceof LimiteFotosError) {
-        avisar('No pudimos subir la foto', e.message);
+        avisar(t('fotos.noSubimosTitulo'), e.message);
       } else {
-        avisar('No pudimos subir la foto', 'Revisa tu conexión e intenta de nuevo.');
+        avisar(t('fotos.noSubimosTitulo'), t('fotos.noSubimos'));
       }
     } finally {
       setOcupado(false);
@@ -112,22 +114,22 @@ export function MisFotos({
         setFotos(lista);
         onCambio?.(lista[0]?.url ?? null, lista.length);
       } catch {
-        avisar('No pudimos quitarla', 'Intenta de nuevo en un momento.');
+        avisar(t('fotos.noQuitamosTitulo'), t('fotos.intentaLuego'));
       } finally {
         setOcupado(false);
       }
     };
 
     const texto = foto.orden === 0 && fotos.length > 1
-      ? 'Es tu foto principal. La siguiente pasará a ocupar su lugar.'
-      : '¿Seguro que quieres quitar esta foto?';
+      ? t('fotos.quitarPrincipal')
+      : t('fotos.quitarSeguro');
 
     if (Platform.OS === 'web') {
       if (window.confirm(`Quitar foto\n\n${texto}`)) hacer();
     } else {
-      Alert.alert('Quitar foto', texto, [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Quitar', style: 'destructive', onPress: hacer },
+      Alert.alert(t('fotos.quitarTitulo'), texto, [
+        { text: t('comun.cancelar'), style: 'cancel' },
+        { text: t('fotos.quitar'), style: 'destructive', onPress: hacer },
       ]);
     }
   };
@@ -143,7 +145,7 @@ export function MisFotos({
     } catch {
       setFotos(previo);
       onCambio?.(previo[0]?.url ?? null, previo.length);
-      avisar('No pudimos cambiarla', 'Intenta de nuevo en un momento.');
+      avisar(t('fotos.noCambiamosTitulo'), t('fotos.intentaLuego'));
     } finally {
       setOcupado(false);
     }
@@ -166,7 +168,7 @@ export function MisFotos({
       {conEncabezado && (
         <>
           <View style={e.encabezado}>
-            <Text style={e.titulo}>Mis fotos</Text>
+            <Text style={e.titulo}>{t('fotos.titulo')}</Text>
             <Text style={e.contador}>{fotos.length}/{MAX_FOTOS}</Text>
           </View>
           <Text style={e.ayuda}>
@@ -194,7 +196,7 @@ export function MisFotos({
               />
               {i === 0 ? (
                 <View style={e.etiquetaPrincipal}>
-                  <Text style={e.etiquetaPrincipalTexto}>PRINCIPAL</Text>
+                  <Text style={e.etiquetaPrincipalTexto}>{t('fotos.principal')}</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -203,9 +205,9 @@ export function MisFotos({
                   disabled={ocupado}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel="Usar esta como foto de perfil"
+                  accessibilityLabel={t('fotos.a11yUsarPerfil')}
                 >
-                  <Text style={e.botonPrincipalTexto}>Hacer principal</Text>
+                  <Text style={e.botonPrincipalTexto}>{t('fotos.hacerPrincipal')}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -214,7 +216,7 @@ export function MisFotos({
                 disabled={ocupado}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Quitar esta foto"
+                accessibilityLabel={t('fotos.a11yQuitar')}
               >
                 <Text style={e.quitarTexto}>×</Text>
               </TouchableOpacity>
@@ -229,7 +231,7 @@ export function MisFotos({
               disabled={ocupado}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Agregar una foto"
+              accessibilityLabel={t('fotos.a11yAgregar')}
             >
               {ocupado && i === 0 ? (
                 <ActivityIndicator color="#AD1457" />
@@ -239,12 +241,12 @@ export function MisFotos({
                    mismo en su lugar, y entenderlo motiva mas que un texto. */
                 <>
                   <ExpoImage source={porDefecto} style={e.avatarHueco} contentFit="contain" />
-                  <Text style={e.masTexto}>Subir la primera</Text>
+                  <Text style={e.masTexto}>{t('fotos.subirPrimera')}</Text>
                 </>
               ) : (
                 <>
                   <Text style={e.mas}>+</Text>
-                  <Text style={e.masTexto}>Agregar</Text>
+                  <Text style={e.masTexto}>{t('fotos.agregar')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -317,6 +319,7 @@ export function MisFotosHoja({
   gender?: string | null;
   onCambio?: (urlPrincipal: string | null, cuantas: number) => void;
 }) {
+  const { t } = useIdioma();
   const insets = useSafeAreaInsets();
 
   return (
@@ -328,10 +331,9 @@ export function MisFotosHoja({
           onPress={() => {}}
         >
           <View style={h.agarradera} />
-          <Text style={h.titulo}>Mis fotos</Text>
+          <Text style={h.titulo}>{t('fotos.titulo')}</Text>
           <Text style={h.ayuda}>
-            Puedes subir hasta {MAX_FOTOS}. La primera es tu foto de perfil, y las demás
-            las ven las personas de tu grupo antes del evento.
+            {t('fotos.ayuda', { max: MAX_FOTOS })}
           </Text>
 
           <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
@@ -339,7 +341,7 @@ export function MisFotosHoja({
           </ScrollView>
 
           <TouchableOpacity style={h.listo} onPress={onClose} activeOpacity={0.85}>
-            <Text style={h.listoTexto}>Listo</Text>
+            <Text style={h.listoTexto}>{t('fotos.listo')}</Text>
           </TouchableOpacity>
         </TouchableOpacity>
       </TouchableOpacity>
