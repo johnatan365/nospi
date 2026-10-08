@@ -827,9 +827,43 @@ export default function SubscriptionPlansScreen() {
     setShowSuccessModal(true);
   };
 
+  // Resuelve la sesion con tres intentos antes de rendirse. La version anterior
+  // solo leia la sesion cacheada: si estaba vencida -- tipico en web, donde la
+  // gente deja la pestana abierta horas -- devolvia null y el pago moria con un
+  // "Sesion no encontrada" DESPUES de que la persona ya habia llenado banco,
+  // correo, celular y documento. Caso real del 8 de octubre: una usuaria que
+  // solo usa web llego hasta el boton de pagar y el intento ni siquiera se
+  // creo en Wompi, asi que tampoco aparecio en el admin como declinado: una
+  // venta perdida invisible. Es la misma cadena que ya usaba
+  // checkSubscriptionAndAutoConfirm mas arriba en este archivo.
   const getSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user ?? user;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {}
+    try {
+      await supabase.auth.refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {}
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) return authUser;
+    } catch {}
+    return user ?? null;
+  };
+
+  // Punto unico para exigir sesion antes de cobrar. Si no hay, se lo dice a la
+  // persona en espanol claro y la lleva al login, en vez del error tecnico.
+  const exigirSesion = async () => {
+    const actual = await getSession();
+    if (actual) return actual;
+    showAlert(
+      'Tu sesión se venció',
+      'Vuelve a iniciar sesión para completar el pago. No se te cobró nada.'
+    );
+    router.push('/login');
+    return null;
   };
 
   const getWompiTokens = async () => {
@@ -899,8 +933,8 @@ export default function SubscriptionPlansScreen() {
     ]);
     setProcessingMethod('card');
     try {
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      const currentUser = await exigirSesion();
+      if (!currentUser) { setProcessingMethod(null); return; }
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
@@ -1167,8 +1201,8 @@ export default function SubscriptionPlansScreen() {
     if (cleanPhone.length !== 10) { showAlert(t('comun.error'), t('pago.celularInvalido')); return; }
     setProcessingMethod('nequi');
     try {
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      const currentUser = await exigirSesion();
+      if (!currentUser) { setProcessingMethod(null); return; }
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
@@ -1230,8 +1264,8 @@ export default function SubscriptionPlansScreen() {
     setProcessingMethod('bancolombia');
     try {
 
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      const currentUser = await exigirSesion();
+      if (!currentUser) { setProcessingMethod(null); return; }
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
@@ -1572,8 +1606,8 @@ export default function SubscriptionPlansScreen() {
     setProcessingMethod('pse');
     try {
 
-      const currentUser = await getSession();
-      if (!currentUser) throw new Error('Sesión no encontrada');
+      const currentUser = await exigirSesion();
+      if (!currentUser) { setProcessingMethod(null); return; }
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
       if (!pendingEventId) throw new Error('No se encontró el evento pendiente');
 
@@ -2178,7 +2212,7 @@ export default function SubscriptionPlansScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowCardForm(true)} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={async () => { if (await exigirSesion()) setShowCardForm(true); }} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Text style={styles.btnIcon}>💳</Text>
             <View style={styles.btnTextWrap}>
@@ -2189,7 +2223,7 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.paymentBtn} onPress={() => setShowNequiForm(true)} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={async () => { if (await exigirSesion()) setShowNequiForm(true); }} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo-nequi.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
@@ -2209,7 +2243,7 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.paymentBtn} onPress={() => { setShowPSEForm(true); loadPSEBanks(); }} disabled={processing} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.paymentBtn} onPress={async () => { if (await exigirSesion()) { setShowPSEForm(true); loadPSEBanks(); } }} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
             <View style={styles.btnTextWrap}>
