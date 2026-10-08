@@ -65,6 +65,11 @@ interface SalaMeet {
 
 // Un sticker del catalogo. `url` es publica y es lo que se guarda en el mensaje
 // al mandarlo; `storage_path` sirve para borrar el archivo al quitarlo.
+interface PackAdmin {
+  id: string;
+  nombre: string;
+}
+
 interface StickerAdmin {
   id: string;
   url: string;
@@ -909,7 +914,13 @@ export default function AdminPanelScreen() {
 
   // Stickers de Nospi: el catalogo que la gente manda en el chat.
   const [stickersAdmin, setStickersAdmin] = useState<StickerAdmin[]>([]);
+  const [packs, setPacks] = useState<PackAdmin[]>([]);
   const [packId, setPackId] = useState<string | null>(null);
+  // El paquete elegido, en un ref ademas del estado: cargarStickers se llama
+  // despues de subir o borrar y tiene que quedarse donde estaba, pero no debe
+  // rehacerse cada vez que cambia el paquete.
+  const packElegidoRef = useRef<string | null>(null);
+  const [packNuevo, setPackNuevo] = useState('');
   const [stickerSubiendo, setStickerSubiendo] = useState(false);
   const [stickerMsg, setStickerMsg] = useState('');
   // Mostrar u ocultar los originales que ya se dividieron en mesas.
@@ -2377,11 +2388,23 @@ export default function AdminPanelScreen() {
 
   // ── Stickers ─────────────────────────────────────────────────────────────
 
-  const cargarStickers = useCallback(async () => {
-    const { data: packs } = await supabase
-      .from('sticker_packs').select('id').eq('activo', true).order('orden').limit(1);
-    const pid = (packs as any[])?.[0]?.id || null;
+  // Antes esto pedia UN paquete --el primero-- y metia todo ahi, asi que no
+  // habia forma de tener un segundo aunque la tabla los soportara desde el
+  // principio. Con 70 stickers en una sola lista el selector del chat es un
+  // scroll largo; por paquetes son pestañas, como en WhatsApp.
+  const cargarStickers = useCallback(async (quedarseEn?: string | null) => {
+    const { data: ps, error: ePs } = await supabase
+      .from('sticker_packs').select('id, nombre').eq('activo', true).order('orden');
+    if (ePs) { console.error('paquetes:', ePs.message); return; }
+    const lista = (ps as PackAdmin[]) || [];
+    setPacks(lista);
+
+    // Se respeta el paquete en el que estaba, salvo que ya no exista.
+    const pedido = quedarseEn ?? packElegidoRef.current;
+    const pid = pedido && lista.some((x) => x.id === pedido) ? pedido : lista[0]?.id ?? null;
+    packElegidoRef.current = pid;
     setPackId(pid);
+
     if (!pid) { setStickersAdmin([]); return; }
     const { data, error } = await supabase
       .from('stickers')
@@ -2390,6 +2413,20 @@ export default function AdminPanelScreen() {
     if (error) { console.error('stickers:', error.message); return; }
     setStickersAdmin((data as StickerAdmin[]) || []);
   }, []);
+
+  const crearPaquete = async () => {
+    const nombre = packNuevo.trim();
+    if (!nombre) return;
+    const { data, error } = await supabase
+      .from('sticker_packs')
+      .insert({ nombre, orden: packs.length + 1 })
+      .select('id')
+      .single();
+    if (error) { setStickerMsg(error.message); return; }
+    setPackNuevo('');
+    setStickerMsg(`Paquete «${nombre}» creado.`);
+    await cargarStickers((data as { id: string }).id);
+  };
 
   const subirStickers = async (archivos: FileList | null) => {
     if (!archivos || archivos.length === 0 || !packId) return;
@@ -8620,6 +8657,45 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             Sin transparencia se ven como una foto con marco encima de la conversación.
           </div>
 
+          {/* Los paquetes. Lo que se sube, se ordena o se quita va SIEMPRE al
+              que esté elegido aquí: con 70 stickers una sola lista es un
+              scroll largo, y en el chat cada paquete es su pestaña. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+            {packs.map((pk) => {
+              const elegido = pk.id === packId;
+              return (
+                <button
+                  key={pk.id}
+                  onClick={() => cargarStickers(pk.id)}
+                  style={{ background: elegido ? '#7C3AED' : 'white', color: elegido ? 'white' : '#6B7280',
+                           border: `1px solid ${elegido ? '#7C3AED' : '#E5E7EB'}`, borderRadius: 999,
+                           padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {pk.nombre}
+                </button>
+              );
+            })}
+            <span style={{ width: 1, height: 22, background: '#E5E7EB', margin: '0 4px' }} />
+            <input
+              value={packNuevo}
+              onChange={(e) => setPackNuevo(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') crearPaquete(); }}
+              placeholder="Nombre de un paquete nuevo"
+              style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: '7px 12px',
+                       fontSize: 13, width: 210 }}
+            />
+            <button
+              onClick={crearPaquete}
+              disabled={!packNuevo.trim()}
+              style={{ background: packNuevo.trim() ? '#B1185B' : '#E5E7EB',
+                       color: packNuevo.trim() ? 'white' : '#9CA3AF', border: 'none', borderRadius: 10,
+                       padding: '8px 16px', fontSize: 13, fontWeight: 700,
+                       cursor: packNuevo.trim() ? 'pointer' : 'default' }}
+            >
+              Crear paquete
+            </button>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 12 }}>
             {stickersAdmin.map((s, i) => (
               <div key={s.id} style={{ position: 'relative' }}>
@@ -8664,11 +8740,11 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             <span style={{ fontSize: 12.5, color: '#6B7280' }}>
               {stickersAdmin.length === 0
                 ? 'Todavía no hay ninguno. La pestaña del chat sale vacía hasta que subas el primero.'
-                : `${stickersAdmin.length} ${stickersAdmin.length === 1 ? 'sticker' : 'stickers'} · las flechas cambian el orden en que los ve la gente`}
+                : `${stickersAdmin.length} ${stickersAdmin.length === 1 ? 'sticker' : 'stickers'} en «${packs.find((pk) => pk.id === packId)?.nombre ?? '—'}» · las flechas cambian el orden en que los ve la gente`}
             </span>
             {!!stickerMsg && (
               <span style={{ fontSize: 12.5, fontWeight: 700,
-                             color: stickerMsg.startsWith('Subidos') ? '#059669' : '#B91C1C' }}>
+                             color: /^(Subidos|Paquete)/.test(stickerMsg) ? '#059669' : '#B91C1C' }}>
                 {stickerMsg}
               </span>
             )}
