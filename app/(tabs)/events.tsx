@@ -11,7 +11,7 @@ import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
 import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
 import { useIdioma } from '@/contexts/IdiomaContext';
-import { nombreEventoIdioma } from '@/utils/nombreEvento';
+import { renglonesEvento } from '@/utils/nombreEvento';
 
 const CACHE_KEY = 'cache_events';
 
@@ -312,8 +312,8 @@ export default function EventsScreen() {
                   const esVirtual = event.type === 'virtual';
                   // En ingles el nombre se arma solo con el tipo y la fecha, y ese nombre
                   // cabe en un renglon: el segundo renglon es cosa del nombre en espanol.
-                  const nombreMostrado = nombreEventoIdioma(event, idioma, t);
-                  const tieneSegundoRenglon = idioma === 'es' && !!(event.subtitulo && event.subtitulo.trim());
+                  const renglones = renglonesEvento(event, idioma, t);
+                  const tieneSegundoRenglon = !!renglones.segundo;
 
                   return (
                     <TouchableOpacity
@@ -365,11 +365,11 @@ export default function EventsScreen() {
                             renglon, el nombre puede usar los dos. */}
                         <View style={styles.eventNameBlock}>
                           <Text style={styles.eventNameCompact} numberOfLines={tieneSegundoRenglon ? 1 : 2}>
-                            {nombreMostrado}
+                            {renglones.primero}
                           </Text>
                           {tieneSegundoRenglon && (
                             <Text style={styles.eventNameCompact} numberOfLines={1}>
-                              {event.subtitulo}
+                              {renglones.segundo}
                             </Text>
                           )}
                         </View>

@@ -77,6 +77,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
 import { useIdioma } from '@/contexts/IdiomaContext';
+import { nombreEventoIdioma } from '@/utils/nombreEvento';
 
 // Prefijo para guardar el borrador (lo que se está escribiendo pero aún no se
 // envía) por conversación, para que no se pierda al salir y volver al chat.
@@ -1055,7 +1056,7 @@ function PollCard({ pollId }: { pollId: string }) {
 }
 
 export default function ChatThreadScreen() {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const { user } = useSupabase();
   const router = useRouter();
@@ -3862,13 +3863,22 @@ export default function ChatThreadScreen() {
   // que meta llega null y el nombre/foto hay que sacarlos de los participantes
   // (get_conversation_participants si los trae, con o sin mensajes).
   const otherParticipant = !esGrupal && !isChannel ? participants.find((p) => p.user_id !== user?.id) : undefined;
+  // El titulo guardado ("Avisos · Cena (28 de octubre)", "Comunidad Nospi") esta
+  // en espanol y lo usa el equipo en el admin, asi que en ingles se rearma con el
+  // tipo y la fecha del evento en vez de traducir el texto de la base.
+  const nombreDelEvento = nombreEventoIdioma(
+    { type: meta?.event_type, date: meta?.event_date, name: meta?.event_name },
+    idioma, t,
+  );
   const headerTitle = isChannel
-    ? meta?.channel_title || 'Canal de Nospi'
+    ? (nombreDelEvento && !!meta?.event_date
+        ? t('chats.avisosDe', { evento: nombreDelEvento })
+        : (idioma === 'en' ? t('chat.canalDeNospi') : (meta?.channel_title || t('chat.canalDeNospi'))))
     : isComunidad
-    ? meta?.channel_title || 'Comunidad Nospi'
+    ? (idioma === 'en' ? t('chats.comunidadNospi') : (meta?.channel_title || t('chats.comunidadNospi')))
     : isGroup
-    ? meta?.event_name || 'Chat del evento'
-    : meta?.other_user_name || otherParticipant?.name || 'Chat';
+    ? (nombreDelEvento || t('chat.chatDelEvento'))
+    : meta?.other_user_name || otherParticipant?.name || t('chat.chat');
   const otherUserPhoto = !esGrupal && !isChannel
     ? meta?.other_user_photo || otherParticipant?.profile_photo_url || null
     : null;
@@ -4063,8 +4073,8 @@ export default function ChatThreadScreen() {
                 // En la comunidad la mayoria NO ha coincidido en un evento, asi
                 // que escribirle a alguien pasa casi siempre por una solicitud.
                 // Decirlo aqui evita la sorpresa de "¿por que no puedo escribir?".
-                ? '💬 Toca aquí para ver quién está y enviar una solicitud'
-                : '💬 Toca aquí para escribirle en privado a alguien del grupo'}
+                ? t('chat.tocaVerQuienEsta')
+                : t('chat.tocaEscribirPrivado')}
             </Text>
           </TouchableOpacity>
         )}
@@ -5017,7 +5027,7 @@ export default function ChatThreadScreen() {
                 <View style={[styles.attachTileBox, { backgroundColor: '#FFF1DC' }]}>
                   <IconSymbol ios_icon_name="chart.pie.fill" android_material_icon_name="pie-chart" size={28} color="#F59E0B" />
                 </View>
-                <Text style={styles.attachTileText}>Crear encuesta</Text>
+                <Text style={styles.attachTileText}>{t('chat.crearEncuesta')}</Text>
               </TouchableOpacity>
 
               {/* Solo cuando de verdad hay una imagen copiada: un boton que casi
@@ -5242,7 +5252,7 @@ export default function ChatThreadScreen() {
           <View style={[styles.pollSheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetGrabber} />
             <View style={styles.gifHeader}>
-              <Text style={styles.attachSheetTitle}>Crear encuesta</Text>
+              <Text style={styles.attachSheetTitle}>{t('chat.crearEncuesta')}</Text>
               <TouchableOpacity onPress={() => setShowPollForm(false)} hitSlop={10}>
                 <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={22} color={nospiColors.gray400} />
               </TouchableOpacity>
@@ -5334,7 +5344,7 @@ export default function ChatThreadScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Asistentes</Text>
+              <Text style={styles.modalTitle}>{t('chat.asistentes')}</Text>
               <TouchableOpacity onPress={() => { setBuscaAsistente(''); setShowParticipants(false); }}>
                 <IconSymbol ios_icon_name="xmark" android_material_icon_name="close" size={24} color={nospiColors.purpleDark} />
               </TouchableOpacity>

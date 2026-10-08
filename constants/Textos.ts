@@ -1101,6 +1101,17 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chats.chatDelEvento': 'Chat del evento',
     'chats.usuario': 'Usuario',
 
+
+    // ---------- Chat: encabezado, asistentes y encuesta ----------
+    'chat.canalDeNospi': 'Canal de Nospi',
+    'chat.tocaVerQuienEsta': '💬 Toca aquí para ver quién está y enviar una solicitud',
+    'chat.tocaEscribirPrivado': '💬 Toca aquí para escribirle en privado a alguien del grupo',
+    'chat.asistentes': 'Asistentes',
+    'chat.crearEncuesta': 'Crear encuesta',
+    'chat.chatDelEvento': 'Chat del evento',
+    'chat.chat': 'Chat',
+    'evento.soloFecha': '{{fecha}}',
+
   },
 
   en: {
@@ -2193,6 +2204,17 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'chats.avisosDe': 'Updates · {{evento}}',
     'chats.chatDelEvento': 'Event chat',
     'chats.usuario': 'User',
+
+
+    // ---------- Chat: encabezado, asistentes y encuesta ----------
+    'chat.canalDeNospi': 'Nospi channel',
+    'chat.tocaVerQuienEsta': '💬 Tap here to see who’s in and send a request',
+    'chat.tocaEscribirPrivado': '💬 Tap here to message someone from the group privately',
+    'chat.asistentes': 'Who’s coming',
+    'chat.crearEncuesta': 'Create a poll',
+    'chat.chatDelEvento': 'Event chat',
+    'chat.chat': 'Chat',
+    'evento.soloFecha': '{{fecha}}',
 
   },
 };

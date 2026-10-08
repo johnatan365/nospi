@@ -102,3 +102,28 @@ export function descripcionEventoIdioma(
 
   return t(`evento.desc.${evento?.type || 'restaurante'}`);
 }
+
+/**
+ * El nombre partido en los dos renglones de la tarjeta de la lista.
+ *
+ * En espanol son `name` y `subtitulo` ("Cena (28 de octubre)" / "Miercoles").
+ * En ingles se arma igual de dos renglones para que la tarjeta se vea pareja:
+ * el tipo arriba ("Dinner") y el dia con la fecha abajo ("Wed, Oct 28").
+ */
+export function renglonesEvento(
+  evento: EventoTexto | null | undefined,
+  idioma: Idioma,
+  t: (clave: string, vars?: Record<string, string | number>) => string,
+): { primero: string; segundo: string } {
+  if (idioma !== 'en') {
+    return {
+      primero: (evento?.name || '').trim(),
+      segundo: (evento?.subtitulo || '').trim(),
+    };
+  }
+  const propio = (evento?.name_en || '').trim();
+  return {
+    primero: propio || t(claveTipo(evento?.type)),
+    segundo: fechaCorta(evento?.date),
+  };
+}
