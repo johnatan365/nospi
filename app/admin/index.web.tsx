@@ -996,6 +996,8 @@ export default function AdminPanelScreen() {
   const [configTraducirEventos, setConfigTraducirEventos] = useState(true);
   const [configTraducirPreguntas, setConfigTraducirPreguntas] = useState(true);
   const [usoTraduccion, setUsoTraduccion] = useState<{ usados: number; tope: number } | null>(null);
+  const [usoTraduccionError, setUsoTraduccionError] = useState<string | null>(null);
+  const [cargandoUso, setCargandoUso] = useState(false);
   const [configSubPrice3m, setConfigSubPrice3m] = useState('');
   const [configSubPrice6m, setConfigSubPrice6m] = useState('');
   // Interruptor de la prueba de solo-suscripcion (puerta 2). Ver PUERTA-2.md.
@@ -2608,16 +2610,34 @@ export default function AdminPanelScreen() {
 
   // Cuanto saldo de DeepL queda. No se pide al cargar el admin: solo cuando
   // se abre la seccion, para no gastar una llamada en cada visita.
+  //
+  // Si algo falla se MUESTRA el motivo. La primera version se lo tragaba en
+  // silencio y el boton parecia roto: no hacia nada ni decia por que.
   const cargarUsoTraduccion = async () => {
+    setUsoTraduccionError(null);
+    setCargandoUso(true);
     try {
       const { data, error } = await supabase.functions.invoke('traducir-contenido', {
         body: { tipo: 'uso' },
         headers: { 'x-webhook-token': '7bb46a6e95dfdc543cab8eaf1e072e81ec9cbb7e11e7ac6d' },
       });
-      if (error || !data?.disponible) return;
+      if (error) {
+        setUsoTraduccionError('No se pudo consultar DeepL: ' + (error.message || 'error de red'));
+        return;
+      }
+      if (!data?.disponible) {
+        setUsoTraduccionError(
+          data?.error
+            ? 'DeepL respondió: ' + data.error
+            : 'No hay llave de traducción configurada en Supabase.',
+        );
+        return;
+      }
       setUsoTraduccion({ usados: Number(data.usados) || 0, tope: Number(data.tope) || 0 });
-    } catch {
-      // Sin saldo visible la seccion igual sirve: los interruptores no dependen de esto.
+    } catch (e: any) {
+      setUsoTraduccionError('No se pudo consultar DeepL: ' + (e?.message || String(e)));
+    } finally {
+      setCargandoUso(false);
     }
   };
 
@@ -8666,12 +8686,19 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                   </div>
                 </>
               ) : (
-                <div
-                  onClick={cargarUsoTraduccion}
-                  style={{ fontSize: 14, color: '#7C3AED', cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}
-                >
-                  Ver cuánto se ha usado →
-                </div>
+                <>
+                  <div
+                    onClick={cargandoUso ? undefined : cargarUsoTraduccion}
+                    style={{ fontSize: 14, color: cargandoUso ? '#9CA3AF' : '#7C3AED', cursor: cargandoUso ? 'default' : 'pointer', fontWeight: 600, userSelect: 'none' }}
+                  >
+                    {cargandoUso ? 'Consultando…' : 'Ver cuánto se ha usado →'}
+                  </div>
+                  {usoTraduccionError && (
+                    <div style={{ fontSize: 12.5, color: '#DC2626', marginTop: 8, lineHeight: 1.5 }}>
+                      {usoTraduccionError}
+                    </div>
+                  )}
+                </>
               )}
             </Ajuste>
 
