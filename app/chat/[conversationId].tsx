@@ -579,6 +579,52 @@ function mentionRegex(names: string[]): RegExp | null {
   return new RegExp(`(@(?:${clean.join('|')}|todos))`, 'gi');
 }
 
+// Copias sin la bandera /g del regex de menciones, guardadas para no volver a
+// compilarlas.
+//
+// Un regex global guarda lastIndex entre llamadas de .test(), asi que para
+// probar hace falta una copia sin esa bandera. El problema era que se creaba
+// UNA POR MENSAJE: mentionRegex mete TODOS los nombres del chat en una sola
+// alternancia, y en el Canal Nospi son 3.574 -- unos 50 kB de expresion
+// recompilados cincuenta veces seguidas, en el mismo hilo que pinta la
+// pantalla. El WeakMap no retiene nada: la copia se va con el original.
+const copiasSinG = new WeakMap<RegExp, RegExp>();
+function regexParaProbar(re: RegExp): RegExp {
+  let copia = copiasSinG.get(re);
+  if (!copia) {
+    copia = new RegExp(re.source, re.flags.replace(/g/g, ''));
+    copiasSinG.set(re, copia);
+  }
+  return copia;
+}
+
+// A quien hay que poder NOMBRAR en pantalla: quien escribio algo de lo que esta
+// cargado, quien tiene un mensaje fijado y quien reacciono.
+//
+// Es lo que sustituye al censo completo en los canales. El propio id va SIEMPRE
+// aunque no se haya escrito nada: el aviso de "escribiendo" manda el nombre y la
+// foto propios, y sin el perfil llegaria como "Alguien".
+function idsQueHayQueNombrar(
+  msgs: Message[],
+  fijadosAhora: Message[],
+  reacciones: Record<string, { emoji: string; user_id: string }[]>,
+  yo?: string | null,
+): string[] {
+  const vistos = new Set<string>();
+  const anadir = (id?: string | null) => {
+    // El usuario del sistema no es participante de ningun chat: pedirlo seria
+    // un id gastado en cada peticion.
+    if (id && id !== NOSPI_SYSTEM_USER_ID) vistos.add(id);
+  };
+  anadir(yo);
+  for (const m of msgs) anadir(m.sender_id);
+  for (const m of fijadosAhora) anadir(m.sender_id);
+  for (const lista of Object.values(reacciones || {})) {
+    for (const r of lista || []) anadir(r.user_id);
+  }
+  return Array.from(vistos);
+}
+
 // Mete el mensaje REAL en la lista quitando el provisional que lo representaba.
 //
 // Hace falta porque el mensaje llega por DOS caminos que compiten: la respuesta
@@ -615,8 +661,10 @@ function renderMessageContent(
   // lastIndex entre llamadas, por eso aca se usan copias sin la bandera g.
   const tieneLink = /(https?:\/\/|www\.)/i.test(text);
   const tieneTelefono = new RegExp(PHONE_RE.source).test(text);
-  const tieneMencion = mentions
-    ? new RegExp(mentions.source, mentions.flags.replace(/g/g, '')).test(text)
+  // El text.includes('@') va primero y es casi gratis: la gran mayoria de los
+  // mensajes no mencionan a nadie, y asi ni se toca el regex de menciones.
+  const tieneMencion = mentions && text.includes('@')
+    ? regexParaProbar(mentions).test(text)
     : false;
   if (!tieneLink && !tieneTelefono && !tieneMencion) return text;
 
@@ -1037,6 +1085,35 @@ export default function ChatThreadScreen() {
     });
     if (error) { console.error('ChatThread: error recargando participantes', error); return; }
     if (data) setParticipants(data as Participant[]);
+  }, [conversationId]);
+
+  // Pide perfiles del chat. Con una lista de ids pide SOLO esos; con null, a
+  // todos. Las reglas de quien se puede ver las aplica la base
+  // (get_chat_perfiles), igual que para la lista completa: pasar ids de gente
+  // ajena al chat no devuelve nada.
+  //
+  // Existe para los canales. El Canal Nospi tiene 3.574 participantes y pedir
+  // el censo eran 1,5 MB por cada vez que se abria -- creciendo con cada
+  // registro-- cuando ahi esa lista no se muestra en ninguna parte: el boton de
+  // "Asistentes" solo sale si el chat es grupo o Comunidad.
+  const pedirPerfiles = useCallback(async (ids: string[] | null): Promise<Participant[] | null> => {
+    if (!conversationId) return null;
+    // Sin ids que pedir no se llama: null significa "todos" en la base, y
+    // mandarlo por descuido traeria justo el censo que queremos evitar.
+    if (ids && ids.length === 0) return [];
+    // Cuando se quiere a todos NO se manda el parametro, en vez de mandarlo en
+    // null: la funcion ya lo tiene por defecto en null, y asi el resultado no
+    // depende de como serialice PostgREST un null para un uuid[].
+    const { data, error } = await supabase.rpc(
+      'get_chat_perfiles',
+      ids ? { p_conversation_id: conversationId, p_user_ids: ids }
+          : { p_conversation_id: conversationId },
+    );
+    if (error) {
+      console.error('ChatThread: error pidiendo perfiles', error);
+      return null;
+    }
+    return (data as Participant[]) || [];
   }, [conversationId]);
 
   const [meta, setMeta] = useState<ConversationMeta | null>(null);
@@ -1912,9 +1989,47 @@ export default function ChatThreadScreen() {
   // En que conversacion ya llego la lista FRESCA, para que una copia guardada
   // que tarde en leerse no la pise.
   const participantesFrescosRef = useRef<string | null>(null);
+  // Que ids ya se pidieron en este canal. Cada uno se pide UNA vez: la base
+  // puede no devolverlo nunca --alguien que se salio del canal-- y sin esto el
+  // efecto de abajo lo volveria a pedir en cada render, para siempre.
+  const idsPedidosRef = useRef<Set<string>>(new Set());
+
+  // Un canal es de difusion. Se calcula aqui arriba y no junto a los demas
+  // porque el efecto que sigue lo necesita en su lista de dependencias, y esa
+  // se evalua al renderizar: declararlo mas abajo seria leerlo antes de existir.
+  const esCanal = meta?.conv_type === 'channel_global' || meta?.conv_type === 'channel_event';
+
+  // A quien hay que poder nombrar con lo que esta en pantalla ahora mismo.
+  const idsNecesarios = useMemo(
+    () => idsQueHayQueNombrar(messages, fijados, reactions, user?.id),
+    [messages, fijados, reactions, user?.id],
+  );
   useEffect(() => {
     if (loading || !conversationId || !user?.id) return;
     if (participantesEnVueloRef.current) return;   // ya viene en camino
+
+    // En un canal no hay censo que reintentar: se piden los perfiles que van
+    // haciendo falta --quien escribe, quien reacciona, quien aparece al subir
+    // por el historial-- y nada mas.
+    if (esCanal) {
+      const faltan = idsNecesarios.filter(
+        (id) => !participantsById[id] && !idsPedidosRef.current.has(id),
+      );
+      if (faltan.length === 0) return;
+      faltan.forEach((id) => idsPedidosRef.current.add(id));
+      participantesEnVueloRef.current = true;
+      pedirPerfiles(faltan).then((nuevos) => {
+        participantesEnVueloRef.current = false;
+        if (!nuevos || nuevos.length === 0) return;
+        setParticipants((prev) => {
+          const yaEstan = new Set(prev.map((pp) => pp.user_id));
+          const anadidos = nuevos.filter((pp) => !yaEstan.has(pp.user_id));
+          return anadidos.length === 0 ? prev : [...prev, ...anadidos];
+        });
+      });
+      return;
+    }
+
     if (reintentoParticipantesRef.current === conversationId) return;
     const faltaAlguno = messages.some(
       (m) => m.sender_id !== user.id
@@ -1924,7 +2039,8 @@ export default function ChatThreadScreen() {
     if (!faltaAlguno) return;
     reintentoParticipantesRef.current = conversationId;
     recargarParticipantes();
-  }, [loading, conversationId, user?.id, messages, participantsById, recargarParticipantes]);
+  }, [loading, conversationId, user?.id, messages, participantsById, recargarParticipantes,
+      esCanal, idsNecesarios, pedirPerfiles]);
 
   // Con quien es el chat, cuando es privado. Se prefiere el de meta porque
   // llega antes que la lista de participantes.
@@ -1969,9 +2085,7 @@ export default function ChatThreadScreen() {
     // guardada --que trae nombres y fotos, asi que no hay parpadeo de burbujas
     // sin nombre-- y la lista fresca la reemplaza cuando llega.
     participantesFrescosRef.current = null;
-    participantesEnVueloRef.current = true;
-    const participantesPromesa = supabase
-      .rpc('get_conversation_participants_v2', { p_conversation_id: conversationId });
+    idsPedidosRef.current = new Set();
 
     getCached<Participant[]>(CLAVE_PARTICIPANTES(conversationId))
       .then((guardados) => {
@@ -2116,39 +2230,48 @@ export default function ChatThreadScreen() {
 
     setLoading(false);
 
-    // La lista, cuando llegue. Ya no retrasa nada.
-    participantesPromesa.then(({ data, error }) => {
-      participantesEnVueloRef.current = false;
-      if (error) {
-        console.error('ChatThread: error loading participants', error);
-        return;
-      }
-      const lista = (data as Participant[]) || [];
-      participantesFrescosRef.current = conversationId;
-      setParticipants(lista);
+    // Y ahora los perfiles. Van DESPUES del pintado, y eso es lo que permite
+    // elegir cuales pedir: hasta aqui no se sabia que clase de chat es.
+    //
+    // En un canal se piden SOLO los de quien aparece en pantalla. En el Canal
+    // Nospi el censo son 3.574 personas y 1,5 MB, y ahi esa lista no se muestra
+    // en ningun sitio: el boton de "Asistentes" solo sale si el chat es grupo o
+    // Comunidad. En un grupo o en la Comunidad se sigue pidiendo entera, porque
+    // esa lista SI se abre y se busca por nombre.
+    const esUnCanal = thisConv?.conv_type === 'channel_global'
+      || thisConv?.conv_type === 'channel_event';
+    const queIds = esUnCanal
+      ? idsQueHayQueNombrar(listaFinal, (fijadosData as Message[]) || [], {}, user.id)
+      : null;
 
-      // Solo se guarda copia de la Comunidad y de los canales, que no filtran
-      // por evento. En un grupo de evento la base esconde A PROPOSITO a quien
-      // no asistio --"quien no fue no aparece para nadie"-- y una copia vieja
-      // lo volveria a mostrar. Ademas ahi son seis personas: nada que ganar.
+    participantesEnVueloRef.current = true;
+    const perfiles = await pedirPerfiles(queIds);
+    participantesEnVueloRef.current = false;
+
+    if (perfiles) {
+      participantesFrescosRef.current = conversationId;
+      if (queIds) queIds.forEach((id) => idsPedidosRef.current.add(id));
+      setParticipants(perfiles);
+
+      // Solo se guarda copia de la Comunidad y del Canal, que no filtran por
+      // evento. En un grupo de evento la base esconde A PROPOSITO a quien no
+      // asistio --"quien no fue no aparece para nadie"-- y una copia vieja lo
+      // volveria a mostrar. Ademas ahi son seis personas: nada que ganar.
       const sinRestriccionPorEvento = !!thisConv
         && !thisConv.event_id
         && (thisConv.conv_type === 'community' || thisConv.conv_type === 'channel_global');
       if (sinRestriccionPorEvento) {
-        setCached(CLAVE_PARTICIPANTES(conversationId), lista).catch(() => {});
+        setCached(CLAVE_PARTICIPANTES(conversationId), perfiles).catch(() => {});
       }
-    }, (e: unknown) => {
-      // El constructor de supabase devuelve un thenable, no una Promise: el
-      // fallo se recoge en el segundo argumento, no con .catch().
-      participantesEnVueloRef.current = false;
-      console.error('ChatThread: error loading participants', e);
-    });
+    }
 
     // OJO: aqui NO se marca leido. Antes se hacia, y era justo el problema: se
     // abria el chat, bajaba al ultimo mensaje y todo lo que no se vio quedaba
     // leido. Ahora lo marca onViewableItemsChanged, con lo que de verdad
     // estuvo en pantalla, y se guarda al salir.
-  }, [conversationId, user]);
+    // pedirPerfiles solo depende de conversationId, que ya esta aqui: anadirlo
+    // no provoca recargas extra.
+  }, [conversationId, user, pedirPerfiles]);
 
   useEffect(() => {
     loadEverything();
@@ -3600,8 +3723,16 @@ export default function ChatThreadScreen() {
   // final del texto, que es como se menciona en la practica.
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
-  const mentionCandidates = participants.filter((p) => p.user_id !== user?.id);
-  const mentionRe = mentionRegex(mentionCandidates.map((p) => p.name));
+  // Memoizados los dos: sin esto se rearmaban en CADA render, y mentionRegex
+  // mete todos los nombres del chat en una sola alternancia.
+  const mentionCandidates = useMemo(
+    () => participants.filter((p) => p.user_id !== user?.id),
+    [participants, user?.id],
+  );
+  const mentionRe = useMemo(
+    () => mentionRegex(mentionCandidates.map((p) => p.name)),
+    [mentionCandidates],
+  );
 
   const mentionSuggestions = mentionQuery === null ? [] : (() => {
     const q = normalizeText(mentionQuery);
@@ -3656,8 +3787,9 @@ export default function ChatThreadScreen() {
   // Para todo lo que signifique "esto NO es una conversacion de dos".
   const esGrupal = isGroup || isComunidad;
   // Un canal es de difusion: escribe el equipo de Nospi y, si esta abierto,
-  // tambien responde la gente. Las encuestas se responden siempre.
-  const isChannel = meta?.conv_type === 'channel_global' || meta?.conv_type === 'channel_event';
+  // tambien responde la gente. Las encuestas se responden siempre. Se calcula
+  // mucho mas arriba (esCanal) porque alla lo necesita un efecto.
+  const isChannel = esCanal;
   const channelReadOnly = isChannel && !meta?.replies_open && !isAdminUser;
 
   // Una solicitud sin responder. Se distingue quien la envio: a quien la
