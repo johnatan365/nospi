@@ -2602,7 +2602,38 @@ export default function ChatThreadScreen() {
         },
         (payload) => {
           const upd = payload.new as Message;
-          setMessages((prev) => prev.map((m) => (m.id === upd.id ? { ...m, ...upd } : m)));
+          let esNuevoParaMi = false;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === upd.id)) {
+              return prev.map((m) => (m.id === upd.id ? { ...m, ...upd } : m));
+            }
+
+            // Un UPDATE de un mensaje que NO teniamos.
+            //
+            // Pasa con un mensaje retenido por moderacion que el equipo acaba
+            // de aprobar: mientras estuvo retenido la base lo escondia de
+            // todos menos de su autor, asi que a nosotros nunca nos llego su
+            // INSERT. Al aprobarlo, el trigger le pone created_at = now() para
+            // que salga al final, y este UPDATE es lo PRIMERO que vemos de el.
+            // Antes se perdia: prev.map no encontraba nada que reemplazar y el
+            // mensaje no aparecia hasta recargar el chat, aunque la
+            // notificacion ya hubiera sonado.
+            //
+            // Solo se agrega si de verdad va al final. Un UPDATE de algo viejo
+            // --una edicion de un mensaje de hace meses, fuera de la pagina
+            // cargada-- no puede aparecer abajo como si acabara de llegar; ese
+            // ya saldra al subir por el historial.
+            const ultimo = prev[prev.length - 1];
+            if (ultimo && upd.created_at < ultimo.created_at) return prev;
+            esNuevoParaMi = true;
+            return [...prev, upd];
+          });
+
+          // Si entro por abajo, se trata igual que un mensaje recien llegado.
+          if (esNuevoParaMi && cercaDelFinalRef.current) {
+            marcarLeido(upd.created_at);
+            setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+          }
         }
       )
       // Reacciones en tiempo real: cualquier cambio (poner, cambiar o quitar)
