@@ -177,7 +177,15 @@ export default function IdiomaMesaScreen() {
           el error que ya se corrigio alla: con edge-to-edge la ventana no se
           encoge sola y el teclado sigue tapando. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-      <ScrollView contentContainerStyle={estilos.scroll} keyboardShouldPersistTaps="handled">
+      {/* El paddingTop deja sitio a la flecha.
+          Sin el, el contenido va centrado y en una pantalla llena el titulo
+          subia hasta quedar DEBAJO de la flecha. Se calcula con insets.top
+          porque la flecha tambien se posiciona con el: si se dejara un numero
+          fijo, en un telefono con notch alto la flecha bajaria y el titulo no. */}
+      <ScrollView
+        contentContainerStyle={[estilos.scroll, { paddingTop: insets.top + 64 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={estilos.contenido}>
           <Text style={estilos.titulo}>{t(esPresencial ? 'mesaIdioma.pregunta' : 'mesaIdioma.preguntaSala')}</Text>
           <Text style={estilos.pista}>{t(esPresencial ? 'mesaIdioma.explicacion' : 'mesaIdioma.explicacionSala')}</Text>
