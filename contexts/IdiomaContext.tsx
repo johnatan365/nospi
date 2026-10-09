@@ -16,6 +16,7 @@ import {
   CLAVE_IDIOMA_GUARDADO,
   detectarIdioma,
   traducir,
+  idiomaDeUrl,
 } from '@/lib/i18n';
 import { TEXTOS } from '@/constants/Textos';
 
@@ -54,7 +55,7 @@ export function tSuelto(clave: string, vars?: Record<string, string | number>): 
 export function IdiomaProvider({ children }: { children: React.ReactNode }) {
   // Arrancamos ya con el idioma del dispositivo para que la primera pantalla
   // salga bien pintada; si hay una eleccion guardada, se corrige enseguida.
-  const [idioma, setIdioma] = useState<Idioma>(() => detectarIdioma());
+  const [idioma, setIdioma] = useState<Idioma>(() => idiomaDeUrl() ?? detectarIdioma());
   const [esAutomatico, setEsAutomatico] = useState(true);
   const [cargando, setCargando] = useState(true);
 
@@ -62,6 +63,18 @@ export function IdiomaProvider({ children }: { children: React.ReactNode }) {
     let vivo = true;
     (async () => {
       try {
+        // ?lang= en la direccion manda sobre todo lo demas: lo pone el anuncio
+        // en ingles y hay que respetarlo aunque el celular este en espanol.
+        // Se guarda para que al navegar dentro de la app no se pierda.
+        const pedido = idiomaDeUrl();
+        if (pedido) {
+          if (vivo) {
+            setIdioma(pedido);
+            setEsAutomatico(false);
+          }
+          await AsyncStorage.setItem(CLAVE_IDIOMA_GUARDADO, pedido);
+          return;
+        }
         const guardado = await AsyncStorage.getItem(CLAVE_IDIOMA_GUARDADO);
         if (vivo && (guardado === 'es' || guardado === 'en')) {
           setIdioma(guardado);

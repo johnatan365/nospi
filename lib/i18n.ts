@@ -37,6 +37,25 @@ export function detectarIdioma(): Idioma {
   return IDIOMA_POR_DEFECTO;
 }
 
+// Idioma pedido por la direccion web: app.nospi.co/?lang=en
+//
+// Para que sirve: el anuncio en ingles manda a la landing con ?lang=en y de
+// ahi a la app con ?lang=en. Asi el extranjero que tiene el celular en
+// espanol (pasa, y mucho, entre los que llevan tiempo aca) igual ve todo en
+// ingles, sin tener que buscar el interruptor. Manda sobre lo guardado y
+// sobre el idioma del dispositivo, porque es una peticion explicita.
+//
+// En iOS/Android no existe location, asi que devuelve null y no cambia nada.
+export function idiomaDeUrl(): Idioma | null {
+  try {
+    if (typeof location === 'undefined' || !location.search) return null;
+    const m = /[?&]lang=(en|es)\b/i.exec(location.search);
+    return m ? (m[1].toLowerCase() as Idioma) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Reemplaza {{variable}} dentro de un texto.
 // Ej: interpolar('Hola {{nombre}}', { nombre: 'Ana' }) -> 'Hola Ana'
 export function interpolar(texto: string, vars?: Record<string, string | number>): string {
