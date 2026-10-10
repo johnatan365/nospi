@@ -148,6 +148,11 @@ export default function StatsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(todayBogota());
   const [dateTo, setDateTo] = useState(todayBogota());
+  // La pregunta de zona se responde UNA sola vez por compra, asi que con el
+  // rango por defecto (hoy) el bloque casi siempre salia vacio y parecia que
+  // nadie habia respondido. Por eso arranca en acumulado y el rango de arriba
+  // es opt-in solo para este bloque.
+  const [zonasAcumulado, setZonasAcumulado] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -208,7 +213,7 @@ export default function StatsScreen() {
     let personas = 0;
     for (const r of zonaRows) {
       const day = dayKey(r.created_at);
-      if (day < dateFrom || day > dateTo) continue;
+      if (!zonasAcumulado && (day < dateFrom || day > dateTo)) continue;
       if (!Array.isArray(r.zonas_preferidas) || r.zonas_preferidas.length === 0) continue;
       personas += 1;
       for (const z of r.zonas_preferidas) conteo[z] = (conteo[z] || 0) + 1;
@@ -227,7 +232,7 @@ export default function StatsScreen() {
       .sort((a, b) => b.n - a.n)
       .slice(0, 25);
     return { filas, maximo, escritas, personas };
-  }, [zonaRows, dateFrom, dateTo]);
+  }, [zonaRows, dateFrom, dateTo, zonasAcumulado]);
 
   const apptsByDay = useMemo(() => {
     const map: Record<string, { day: string; count: number; revenue: number; unknown: number; wompiCount: number; manualCount: number }> = {};
@@ -464,14 +469,31 @@ export default function StatsScreen() {
               para decidir a que zonas vale la pena abrir. Mismo criterio que el
               panel de ciudades buscadas. */}
           <Text style={styles.sectionTitle}>Zonas que pide la gente</Text>
+          <View style={styles.zonaToggle}>
+            <TouchableOpacity
+              style={[styles.filterBtn, zonasAcumulado && styles.filterBtnOn]}
+              onPress={() => setZonasAcumulado(true)}
+            >
+              <Text style={[styles.filterBtnText, zonasAcumulado && styles.filterBtnTextOn]}>Acumulado</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterBtn, !zonasAcumulado && styles.filterBtnOn]}
+              onPress={() => setZonasAcumulado(false)}
+            >
+              <Text style={[styles.filterBtnText, !zonasAcumulado && styles.filterBtnTextOn]}>Rango de arriba</Text>
+            </TouchableOpacity>
+          </View>
           {zonasResumen.filas.length === 0 ? (
             <Text style={styles.emptyText}>
-              Nadie ha respondido la pregunta de zona en el rango seleccionado. Aparece al inscribirse a un evento presencial.
+              {zonasAcumulado
+                ? 'Todavia nadie ha respondido la pregunta de zona. Aparece al inscribirse a un evento presencial.'
+                : 'Nadie respondio la pregunta de zona en el rango seleccionado. Cambia a "Acumulado" para ver todas las respuestas.'}
             </Text>
           ) : (
             <>
               <Text style={styles.zonaNota}>
-                {zonasResumen.personas} {zonasResumen.personas === 1 ? 'persona respondio' : 'personas respondieron'}. Es lo que les gustaria, no donde fue el evento.
+                {zonasResumen.personas} {zonasResumen.personas === 1 ? 'persona respondio' : 'personas respondieron'}
+                {zonasAcumulado ? ' desde que existe la pregunta' : ' en el rango de arriba'}. Es lo que les gustaria, no donde fue el evento.
               </Text>
               <View style={styles.table}>
                 {zonasResumen.filas.map((f) => (
@@ -516,6 +538,7 @@ export default function StatsScreen() {
 
 const styles = StyleSheet.create({
   zonaNota: { fontSize: 12, color: '#6B7280', marginTop: -6, marginBottom: 10, lineHeight: 17 },
+  zonaToggle: { flexDirection: 'row', gap: 8, marginTop: -4, marginBottom: 12 },
   zonaBarra: { height: 8, borderRadius: 99, backgroundColor: nospiColors.purpleMid, minWidth: 4 },
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   content: { padding: 24, paddingBottom: 60, maxWidth: 960, width: '100%', alignSelf: 'center' },
@@ -528,6 +551,8 @@ const styles = StyleSheet.create({
   filterInput: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, backgroundColor: '#fff', color: '#111' },
   filterBtn: { borderWidth: 1, borderColor: nospiColors.purpleDark, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 },
   filterBtnText: { color: nospiColors.purpleDark, fontSize: 12, fontWeight: '600' },
+  filterBtnOn: { backgroundColor: nospiColors.purpleDark },
+  filterBtnTextOn: { color: '#fff' },
   errorText: { color: '#A32D2D', fontSize: 13, marginTop: 12 },
   emptyText: { color: '#9CA3AF', fontSize: 14, marginVertical: 16, textAlign: 'center' },
   noteText: { color: '#9CA3AF', fontSize: 11, marginTop: -20, marginBottom: 24, fontStyle: 'italic' },
