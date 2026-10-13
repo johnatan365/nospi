@@ -63,7 +63,7 @@
 //
 // v45: videollamada — el correo del mismo dia y el de inicio dicen que hacer al
 // entrar (camara, ronda de saludo, quien toca "Quiero ser el moderador",
-// papel y lapiz): en un Meet sin nadie de Nospi, nadie arrancaba solo.
+// en un Meet sin nadie de Nospi, nadie arrancaba solo.
 //
 // v53: el moderador sale del mismo grupo. Los textos decian "el moderador lleva
 // el juego" y "alguien se ofrece", que sonaba a que Nospi pone el moderador.
@@ -288,8 +288,7 @@ const PLANTILLA_VIRTUAL_HOY_DEFECTO = [
   '2️⃣ *Confirmar asistencia*',
   '3️⃣ Ahí mismo sale el botón *Ir a Meet*: lo tocas y te abre la llamada', '',
   '🎤 Uno de ustedes modera: si te animas, toca *"Quiero ser el moderador"*',
-  '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras',
-  '✏️ Ten a mano papel y lápiz', '',
+  '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras', '',
   'Al final eliges con quién hiciste clic — si es mutuo, se abre un *chat privado* 🔒', '',
   '📲 ¿Aún sin las apps?',
   'Nospi 👉 nospi.co/app',
@@ -305,7 +304,7 @@ const PLANTILLA_VIRTUAL_VISPERA_DEFECTO = [
   'Google Meet 👉 nospi.co/meet',
   'En Nospi está el enlace, la dinámica y el chat con tus matches. Y te avisa cuando arranca 🔔', '',
   'Mañana desde las {horaBoton} confirmas en la pestaña *Dinámica*, uno del grupo se anima a moderar y entran a la llamada.', '',
-  '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras. Ten a mano papel y lápiz 😉', '',
+  '📹 Te recomendamos entrar con la cámara prendida: nos conocemos mejor viéndonos las caras 😉', '',
   '¿No puedes ir? Cancela hoy y conservas tu saldo. Mañana ya no alcanzamos a devolverlo y te queda una falta.', '',
   '¡Nos pillamos! 😄',
   '_Equipo Nospi_',
@@ -375,7 +374,6 @@ const AL_ENTRAR_VIRTUAL = [
   '📹 Prende la cámara y saluda: venimos a conocernos, y eso pasa viéndonos las caras. Busca un lugar tranquilo con buena señal',
   '🎤 El moderador sale del mismo grupo — puede ser cualquiera de ustedes. Se postula en la app y desde ahí va leyendo las preguntas y dando la palabra',
   '✋ Para hablar, levanta la mano en Meet o espera a que te pasen la palabra',
-  '✏️ Ten a mano papel y lápiz',
 ];
 
 function buildSameDayText(firstName: string, event: any): { subject: string; text: string; html: string } {

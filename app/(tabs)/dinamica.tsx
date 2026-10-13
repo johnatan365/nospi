@@ -2068,16 +2068,21 @@ export default function DinamicaScreen() {
   // Reglas (card 4): solo el moderador ve "Comenzar"; el resto espera.
   if (gamePhase === 'rules' && checkInPhase === 'confirmed') {
     // Texto del primer punto de las reglas, con el numero real de preguntas
-    // cargadas en ESTE evento. Si los 3 niveles tienen la misma cantidad se
-    // resume ("con 8 preguntas cada uno"); si difieren, se detalla por nivel;
-    // si aun no se conoce, se muestra el texto sin numeros.
+    // cargadas en ESTE evento. Si las 3 rondas tienen la misma cantidad se
+    // resume ("de 8 preguntas cada una"); si difieren, se detalla ronda por
+    // ronda; si aun no se conoce, se muestra el texto sin numeros.
+    //
+    // Sin los nombres de los niveles a proposito: antes decia "Divertido,
+    // Coqueto y Atrevido" y eso, leido ANTES de empezar, espanta a quien ya
+    // estaba dudando. Los nombres siguen saliendo DENTRO del juego, al
+    // cambiar de ronda, que es cuando ya estan jugando.
     let nivelesText = t('din.tresNiveles');
     if (questionsPerLevel) {
       const { divertido: d, sensual: s, atrevido: a } = questionsPerLevel;
       if (d > 0 && d === s && s === a) {
-        nivelesText = `Pasarán por 3 niveles — Divertido, Coqueto y Atrevido — con ${d} preguntas cada uno.`;
+        nivelesText = `Pasarán por 3 rondas de ${d} preguntas cada una, que van de lo ligero a lo más personal.`;
       } else if (d + s + a > 0) {
-        nivelesText = `Pasarán por 3 niveles: Divertido (${d} preguntas), Coqueto (${s}) y Atrevido (${a}).`;
+        nivelesText = `Pasarán por 3 rondas de preguntas (${d}, ${s} y ${a}), que van de lo ligero a lo más personal.`;
       }
     }
     return (
