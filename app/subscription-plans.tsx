@@ -2233,16 +2233,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.paymentBtn} onPress={handleBancolombiaPayment} disabled={processing} activeOpacity={0.85}>
-          <View style={styles.btnInner}>
-            <Image source={require('@/assets/images/LogoBancolombia.png')} style={styles.btnLogo} resizeMode="contain" />
-            <View style={styles.btnTextWrap}>
-              <Text style={styles.btnTitle}>Bancolombia</Text>
-            </View>
-            {isProcessing('bancolombia') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
-          </View>
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.paymentBtn} onPress={async () => { if (await exigirSesion()) { setShowPSEForm(true); loadPSEBanks(); } }} disabled={processing} activeOpacity={0.85}>
           <View style={styles.btnInner}>
             <Image source={require('@/assets/images/logo_380.png')} style={styles.btnLogo} resizeMode="contain" />
@@ -2250,6 +2240,16 @@ export default function SubscriptionPlansScreen() {
               <Text style={styles.btnTitle}>PSE</Text>
             </View>
             {isProcessing('pse') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.paymentBtn} onPress={handleBancolombiaPayment} disabled={processing} activeOpacity={0.85}>
+          <View style={styles.btnInner}>
+            <Image source={require('@/assets/images/LogoBancolombia.png')} style={styles.btnLogo} resizeMode="contain" />
+            <View style={styles.btnTextWrap}>
+              <Text style={styles.btnTitle}>Bancolombia</Text>
+            </View>
+            {isProcessing('bancolombia') ? <ActivityIndicator color="#1a1a1a" size="small" /> : <Text style={styles.btnArrow}>›</Text>}
           </View>
         </TouchableOpacity>
 
