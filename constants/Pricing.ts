@@ -21,15 +21,44 @@ export function precioDesdeConfig(valor: string | undefined | null, respaldo: nu
   return Number.isFinite(n) && n > 0 ? n : respaldo;
 }
 
-// Como se MUESTRA un precio segun el idioma de la app.
+// Tasa de respaldo USD -> COP. La real vive en app_config.usd_cop_rate y se
+// edita en Supabase sin tocar codigo; esto solo cubre el instante de carga.
+export const FALLBACK_USD_COP_RATE = 3239;
+
+// Cuanto se le COBRA a Wompi, segun el idioma de la app.
 //
-// Ojo: Wompi cobra siempre en pesos. Esto no convierte nada ni cambia lo que se
-// cobra — es el precio que se le muestra a quien ve la app en ingles, y vive
-// aparte en app_config (event_price_usd, subscription_price_usd, etc.).
+// Wompi liquida siempre en pesos: no existe un cobro "en dolares". Para quien
+// ve la app en ingles se cobra el equivalente en pesos del precio en dolares
+// (event_price_usd x usd_cop_rate), y el banco del visitante le factura
+// aproximadamente esa cifra en su moneda, a su propia tasa.
+//
+// Esto ANTES no existia: la app mostraba "USD 19" y le mandaba a Wompi los
+// 15.000 pesos del precio colombiano, o sea ~USD 4,63. El extranjero veia un
+// precio y le cobraban otro.
+//
+// Va atado al IDIOMA DE LA APP, igual que el texto del precio.
+export function montoACobrarCOP(
+  idioma: 'es' | 'en',
+  cop: number,
+  usd: number,
+  tasaUsdCop: number,
+): number {
+  if (idioma !== 'en') return cop;
+  const convertido = Math.round(usd * tasaUsdCop);
+  // Si la tasa viene en basura, es mas seguro cobrar el precio colombiano que
+  // cobrar 0 o un numero absurdo.
+  return Number.isFinite(convertido) && convertido > 0 ? convertido : cop;
+}
+
+// Como se MUESTRA un precio segun el idioma de la app. El numero en dolares es
+// el de app_config (event_price_usd, subscription_price_usd, etc.), no una
+// division de los pesos.
 //
 // Va atado al IDIOMA DE LA APP a proposito, no a la mesa ni al pais: si
 // dependiera de la mesa, un colombiano que quiere practicar ingles tendria que
 // pagar el precio alto y no entraria ninguno.
+//
+// Ojo: esto es solo el TEXTO. Lo que se cobra lo decide montoACobrarCOP.
 export function textoPrecio(idioma: 'es' | 'en', cop: number, usd: number): string {
   return idioma === 'en' ? `USD ${usd}` : `$${cop.toLocaleString('es-CO')}`;
 }

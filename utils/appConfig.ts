@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 export interface AppConfig {
   event_price: string;
   event_price_usd: string;        // precio del cupo en USD para quien ve la app en ingles
+  usd_cop_rate: string;           // tasa USD->COP para cobrarle en pesos a quien ve la app en ingles
   subscription_price_usd: string;     // suscripcion 1 mes en USD
   subscription_price_3m_usd: string;  // suscripcion 3 meses en USD
   subscription_price_6m_usd: string;  // suscripcion 6 meses en USD
@@ -21,7 +22,8 @@ export interface AppConfig {
 // el instante de carga la app mostraba el doble del precio.
 const DEFAULTS: AppConfig = {
   event_price: '15000',
-  event_price_usd: '19',
+  event_price_usd: '10',
+  usd_cop_rate: '3239',
   subscription_price_usd: '29',
   subscription_price_3m_usd: '69',
   subscription_price_6m_usd: '109',
@@ -63,6 +65,7 @@ export async function getAppConfig(): Promise<AppConfig> {
     for (const row of data) {
       if (row.key === 'event_price') config.event_price = row.value;
       if (row.key === 'event_price_usd') config.event_price_usd = row.value;
+      if (row.key === 'usd_cop_rate') config.usd_cop_rate = row.value;
       if (row.key === 'subscription_price_usd') config.subscription_price_usd = row.value;
       if (row.key === 'subscription_price_3m_usd') config.subscription_price_3m_usd = row.value;
       if (row.key === 'subscription_price_6m_usd') config.subscription_price_6m_usd = row.value;

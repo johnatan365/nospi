@@ -10,7 +10,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
-import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
+import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, FALLBACK_USD_COP_RATE, montoACobrarCOP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -316,22 +316,42 @@ export default function SubscriptionPlansScreen() {
     }
   }, [pseBanks]);
 
-  const priceCOP = (eventPrice !== null && eventPrice !== undefined)
+  // Precio colombiano del cupo: el del evento si lo trae, si no el de app_config.
+  const priceBaseCOP = (eventPrice !== null && eventPrice !== undefined)
     ? eventPrice
     : precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
+  // Lo que de verdad se le cobra a Wompi. Si la app esta en ingles, es el
+  // equivalente en pesos de event_price_usd (ver montoACobrarCOP en
+  // constants/Pricing.ts). Todo lo que cuelga de priceCOP -- el monto que va a
+  // Wompi, el amount_paid_cop que decide el reembolso, el valor del evento
+  // Purchase del pixel y el descuento del saldo virtual -- queda con la misma
+  // cifra, que es justo lo que antes no pasaba.
+  const usdCopRate = precioDesdeConfig(appConfig.usd_cop_rate, FALLBACK_USD_COP_RATE);
+  const priceCOP = montoACobrarCOP(
+    idioma,
+    priceBaseCOP,
+    precioDesdeConfig(appConfig.event_price_usd, 10),
+    usdCopRate,
+  );
   const subscriptionPriceCOP = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
   // El plan de 6 meses es el que deja el menor costo mensual; se anuncia como
   // gancho aunque el detalle de los 3 planes viva en subscription-membership.
   const precioMensualMasBajo = Math.round(precioDesdeConfig(appConfig.subscription_price_6m, 125900) / 6);
-  const breakEvenEventsCOP = priceCOP > 0 ? Math.ceil(subscriptionPriceCOP / priceCOP) : 0;
-
   // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).
   // Sin código aplicado, es igual a priceCOP — no cambia ningún comportamiento existente.
-  // Lo que se MUESTRA segun el idioma de la app. Wompi cobra siempre en pesos:
-  // esto no convierte nada, es el precio que ve quien tiene la app en ingles.
-  const priceUSD = precioDesdeConfig(appConfig.event_price_usd, 19);
+  // priceUSD es el numero que se MUESTRA en ingles; priceCOP de arriba ya es su
+  // equivalente en pesos, que es lo que se cobra.
+  const priceUSD = precioDesdeConfig(appConfig.event_price_usd, 10);
   const subscriptionPriceUSD = precioDesdeConfig(appConfig.subscription_price_usd, 29);
   const precioMensualMasBajoUSD = Math.round(precioDesdeConfig(appConfig.subscription_price_6m_usd, 109) / 6);
+
+  // "Con la suscripcion te salen N eventos": hay que comparar precios de la
+  // MISMA moneda. En ingles se comparan los dos numeros en dolares; en espanol
+  // se usa el precio colombiano base, no el convertido, para que el resultado
+  // sea identico al de antes.
+  const breakEvenEventsCOP = idioma === 'en'
+    ? (priceUSD > 0 ? Math.ceil(subscriptionPriceUSD / priceUSD) : 0)
+    : (priceBaseCOP > 0 ? Math.ceil(subscriptionPriceCOP / priceBaseCOP) : 0);
 
   const effectivePriceCOP = promoApplied
     ? Math.max(0, Math.round(priceCOP * (1 - promoApplied.discountPercent / 100)))
@@ -2195,7 +2215,12 @@ export default function SubscriptionPlansScreen() {
           <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{t('pago.volverFlecha')}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{t('pago.pagarEsteEvento')}</Text>
-        <Text style={styles.subtitle}>{t('pago.eligeMetodo', { precio: `$${effectivePriceCOP.toLocaleString('es-CO')} COP` })}</Text>
+        {/* En ingles se muestran las dos cifras: el precio en dolares que anunciamos
+            y los pesos que Wompi va a cobrar de verdad, para que nadie se lleve
+            una sorpresa en el extracto. En espanol queda igual que antes. */}
+        <Text style={styles.subtitle}>{t('pago.eligeMetodo', { precio: idioma === 'en'
+          ? `USD ${effectivePriceUSD} (~$${effectivePriceCOP.toLocaleString('es-CO')} COP)`
+          : `$${effectivePriceCOP.toLocaleString('es-CO')} COP` })}</Text>
 
         <Text style={styles.sectionTitle}>{t('pag.comoPagar')}</Text>
 
