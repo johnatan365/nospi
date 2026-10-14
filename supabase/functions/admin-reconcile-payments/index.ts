@@ -4,6 +4,14 @@
 // quedo en un estado no final (ej. PENDING, por metodos async como PSE/Nequi/
 // Bancolombia), actualiza payment_attempts y, si Wompi ya lo aprobo, confirma
 // la cita automaticamente (misma logica que el webhook / el flujo del cliente).
+//
+// 2026-10-14: ademas de los no finales, ahora reverifica los RECHAZADOS
+// recientes (DECLINED/ERROR/VOIDED de los ultimos RECHECK_DAYS dias) que no
+// tengan cita confirmada. Caso real: a un cliente Bancolombia le debitaron los
+// $15.000 y tenia el comprobante de Wompi, pero nosotros lo teniamos marcado
+// DECLINED y nunca lo volviamos a consultar, asi que su cupo jamas aparecia.
+// Si Wompi dice que en realidad quedo APPROVED, se corrige y se confirma la
+// cita sola.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -19,6 +27,9 @@ const corsHeaders = {
 };
 
 const FINAL_STATUSES = ['APPROVED', 'DECLINED', 'VOIDED', 'ERROR'];
+// Estados negativos que SI vale la pena reverificar contra Wompi, y por cuantos dias atras.
+const NEGATIVE_STATUSES = ['DECLINED', 'ERROR', 'VOIDED'];
+const RECHECK_DAYS = 7;
 
 async function confirmAppointment(supabase: any, userId: string, eventId: string, transactionId: string, paymentMethod: string) {
   await supabase.from('appointments').upsert(
@@ -69,6 +80,7 @@ Deno.serve(async (req: Request) => {
     }
     // --- fin verificacion de administrador ---
 
+    // (a) Los que quedaron en un estado no final (PENDING, etc.), sin limite de fecha.
     const { data: pending, error: pendingError } = await supabase
       .from('payment_attempts')
       .select('id, user_id, event_id, transaction_id, payment_method, status')
@@ -82,9 +94,43 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // (b) Los rechazados recientes: Wompi puede haberlos movido despues de
+    //     avisarnos, y hasta ahora nunca los volviamos a consultar.
+    const sinceISO = new Date(Date.now() - RECHECK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentNegative, error: negativeError } = await supabase
+      .from('payment_attempts')
+      .select('id, user_id, event_id, transaction_id, payment_method, status')
+      .in('status', NEGATIVE_STATUSES)
+      .not('transaction_id', 'is', null)
+      .gte('created_at', sinceISO);
+
+    if (negativeError) {
+      return new Response(JSON.stringify({ error: negativeError.message }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Si la persona YA tiene cita confirmada para ese evento no hay nada que
+    // reparar: se saca de la lista para no gastar llamadas a Wompi.
+    const negativeToCheck: any[] = [];
+    for (const attempt of recentNegative || []) {
+      if (!attempt.user_id || !attempt.event_id) continue;
+      const { data: appt } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('user_id', attempt.user_id)
+        .eq('event_id', attempt.event_id)
+        .eq('status', 'confirmada')
+        .maybeSingle();
+      if (!appt) negativeToCheck.push(attempt);
+    }
+
+    const toCheck = [...(pending || []), ...negativeToCheck];
+
     const results: any[] = [];
 
-    for (const attempt of pending || []) {
+    for (const attempt of toCheck) {
       try {
         const resp = await fetch(`${WOMPI_API_URL}/transactions/${attempt.transaction_id}`, {
           headers: { Authorization: `Bearer ${WOMPI_PRIVATE_KEY}` },
@@ -116,7 +162,13 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, checked: (pending || []).length, results }), {
+    return new Response(JSON.stringify({
+      success: true,
+      checked: toCheck.length,
+      pendientes: (pending || []).length,
+      rechazadosReverificados: negativeToCheck.length,
+      results,
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
