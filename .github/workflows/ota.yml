@@ -1,0 +1,62 @@
+# OTA Update — manda cambios de JavaScript a los celulares SIN pasar por las tiendas.
+#
+# Para que sirve: los cambios que solo tocan codigo JS/TS o imagenes del bundle
+# (textos, precios, pantallas, logica) viajan por aqui y llegan en minutos. Lo
+# que NO viaja por OTA: subir de version, cambiar permisos nativos, agregar o
+# actualizar un paquete nativo, cambiar iconos o splash. Eso sigue necesitando
+# build de tienda (los workflows android.yml / ios.yml).
+#
+# Como se usa: pestana Actions del repo -> "OTA Update (sin tiendas)" ->
+# "Run workflow" -> escribe que cambio -> Run.
+#
+# Ojo con la version: app.json tiene runtimeVersion { policy: appVersion }, asi
+# que esta actualizacion SOLO llega a los celulares que tengan instalada la
+# misma version que figura en app.json (hoy 1.0.53). Si se sube la version en
+# app.json sin sacar build nuevo a las tiendas, el OTA deja de llegarle a nadie.
+# El paso "Verificar" de abajo imprime la version para confirmarlo antes de publicar.
+
+name: OTA Update (sin tiendas)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mensaje:
+        description: 'Que cambio (queda en el historial de Expo)'
+        required: true
+        default: 'Cambios de JS'
+
+jobs:
+  ota:
+    name: Publicar OTA al canal production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Verificar a que version le va a llegar
+        run: |
+          echo "Version en app.json (= runtimeVersion con policy appVersion):"
+          node -p "require('./app.json').expo.version"
+          echo "Canal: production"
+          echo "Si esa version NO es la que esta publicada en App Store y Play Store,"
+          echo "este OTA no le llega a los usuarios. Cancela y revisa antes de seguir."
+
+      - name: Publicar OTA
+        env:
+          MENSAJE: ${{ inputs.mensaje }}
+        run: npx eas-cli update --channel production --message "$MENSAJE" --non-interactive
