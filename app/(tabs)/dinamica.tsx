@@ -918,6 +918,14 @@ export default function DinamicaScreen() {
 
     if (activeParticipants.length < 2) return;
 
+    // SIN MODERADOR NO ARRANCA. Hasta el 17 de octubre esto solo lo protegía
+    // la interfaz (el botón "Comenzar" únicamente se le mostraba al
+    // moderador), y eso no basta: ese día dos mesas llegaron a la pantalla de
+    // juego por otro camino, sin que nadie se hubiera postulado, y la mesa
+    // quedó sin nadie a cargo de leer. La regla va aquí, en el único punto por
+    // el que pasa el arranque real.
+    if (!moderatorId) return;
+
 
     setStartingExperience(true);
 
@@ -1023,7 +1031,7 @@ export default function DinamicaScreen() {
         setStartingExperience(false);
       }, 1000);
     }
-  }, [appointment, activeParticipants, startingExperience, gamePhase]);
+  }, [appointment, activeParticipants, startingExperience, gamePhase, moderatorId]);
 
   const appointmentId = appointment?.id ?? null;
   const appointmentEventId = appointment?.event_id ?? null;

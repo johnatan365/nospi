@@ -844,9 +844,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   ) : null;
 
   // Moderador: solo este usuario ve el botón para avanzar. El resto espera.
-  // Si por algún motivo no hay moderador (dato viejo), se permite avanzar a
-  // todos como antes, para no dejar la mesa trabada.
-  const isModerator = !moderatorId || (!!currentUserId && currentUserId === moderatorId);
+  //
+  // Antes aquí decía `!moderatorId || ...`: sin moderador, TODOS quedaban de
+  // moderador. El 17 de octubre dos mesas entraron a la dinámica sin moderador
+  // (ver migración 20261017..._siempre_hay_moderador) y la mesa se volvía un
+  // descontrol: cualquiera podía saltar la pregunta de los demás.
+  //
+  // Ahora la base garantiza que siempre haya uno, pero si llegara a faltar NO
+  // se abre a todos: se elige uno solo, de forma determinista (el primero por
+  // user_id), para que los teléfonos coincidan en quién manda sin ponerse de
+  // acuerdo. Y la mesa nunca se traba, porque el botón "Cambiar moderador"
+  // sigue disponible para quien no lo es.
+  const moderadorEfectivo = moderatorId
+    || [...activeParticipants].map(p => p.user_id).sort()[0]
+    || null;
+  const isModerator = !!currentUserId && currentUserId === moderadorEfectivo;
   const moderatorName = moderatorId
     ? (activeParticipants.find(p => p.user_id === moderatorId)?.name || t('juego.elModerador'))
     : null;
