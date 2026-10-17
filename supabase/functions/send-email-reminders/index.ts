@@ -26,6 +26,11 @@
 //
 // 4) Correccion puntual con { event_id, send_correction: true, only_emails? }.
 //
+// 5) Aviso de mesa con { event_id, mesa_notice: true, only_emails?, phone_check? }:
+//    correo corto con la mesa asignada, para quien no tiene WhatsApp o cuyo
+//    numero rebota. Con phone_check se agrega el numero que figura en la ficha
+//    y se le pide el correcto.
+//
 // IMPORTANTE - zona horaria: 'event.date' es el INSTANTE UTC exacto del
 // evento (ej. viernes 7pm Bogota = sabado 00:00 UTC). El server corre en
 // UTC, asi que cualquier formateo de fecha para el usuario tiene que pasar
@@ -103,11 +108,17 @@ const MINUTOS_ANTES_ENTRAR = 15;
 // rompen en algunos clientes de correo y la ruta limpia funciona igual.
 const URL_DINAMICA = 'https://app.nospi.co/dinamica';
 
-async function sendEmail(to: string, subject: string, text: string, html?: string): Promise<{ ok: boolean; errorText?: string }> {
+// Buzon real de Nospi, para los correos que piden respuesta.
+const SOPORTE_EMAIL = 'nospisocial@gmail.com';
+
+async function sendEmail(to: string, subject: string, text: string, html?: string, replyTo?: string): Promise<{ ok: boolean; errorText?: string }> {
   if (!RESEND_API_KEY || !to) return { ok: false, errorText: 'sin API key o destinatario' };
   try {
     const payload: Record<string, unknown> = { from: 'Nospi <noreply@nospi.co>', to: [to], subject, text };
     if (html) payload.html = html;
+    // Solo los correos que piden respuesta llevan reply_to: el remitente es
+    // noreply@nospi.co y una respuesta ahi no la lee nadie.
+    if (replyTo) payload.reply_to = replyTo;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -612,7 +623,7 @@ function build3dText(firstName: string, event: any): { subject: string; text: st
 // Correo corto y exclusivo para avisar la mesa asignada. Se usa cuando un
 // evento se divide en mesas y alguien no tiene WhatsApp: el recordatorio del
 // mismo dia ya salio, y reenviarlo entero solo por el numero de mesa es ruido.
-function buildMesaNoticeText(firstName: string, event: any): { subject: string; text: string; html: string } {
+function buildMesaNoticeText(firstName: string, event: any, phoneOnFile?: string | null): { subject: string; text: string; html: string } {
   const mesa = numeroDeMesa(event.name);
   const marca = marcaDeLlegada(event.name);
   const locationFull = buildLocationFull(event.location_name, event.location_address);
@@ -626,6 +637,9 @@ function buildMesaNoticeText(firstName: string, event: any): { subject: string; 
     event.maps_link ? `\u{1F5FA}\u{FE0F} ${event.maps_link}` : null, '',
     `Al llegar di que vienes de ${marca} y te indican donde sentarte.`, '',
     'Ya en la mesa abres la Dinamica en la app y confirmas tu llegada.', '',
+    phoneOnFile ? `Te escribimos por correo porque el WhatsApp que tenemos tuyo, ${phoneOnFile}, no nos funciona.` : null,
+    phoneOnFile ? 'Por WhatsApp es por donde mandamos la informacion importante del evento: la direccion, tu mesa y cualquier cambio de ultima hora. Si ese numero no es el correcto, respondenos este correo con tu numero de WhatsApp y lo actualizamos.' : null,
+    phoneOnFile ? '' : null,
     '\u{00A1}Nos pillamos! \u{1F604}', 'Equipo Nospi',
   ].filter((l) => l !== null).join('\n');
 
@@ -635,6 +649,8 @@ function buildMesaNoticeText(firstName: string, event: any): { subject: string; 
     htmlParagraph(`${event.time ? `\u{1F556} <strong>${formatTimeAmPm(event.time)}</strong>` : ''}${locationFull ? `<br />\u{1F4CD} <strong>${locationFull}</strong>` : ''}`),
     htmlParagraph(`Al llegar di que vienes de <strong>${marca}</strong> y te indican dónde sentarte.`),
     htmlParagraph('Ya en la mesa abres la <strong>Dinámica</strong> en la app y confirmas tu llegada.', { muted: true }),
+    phoneOnFile ? htmlParagraph(`Te escribimos por correo porque el WhatsApp que tenemos tuyo, <strong>${phoneOnFile}</strong>, no nos funciona.`) : '',
+    phoneOnFile ? htmlParagraph('Por WhatsApp es por donde mandamos la información importante del evento: la dirección, tu mesa y cualquier cambio de última hora. Si ese número no es el correcto, respóndenos este correo con tu número de WhatsApp y lo actualizamos.', { muted: true }) : '',
     htmlParagraph('\u{00A1}Nos pillamos! \u{1F604}', { strong: true }),
   ].join('');
 
@@ -684,6 +700,10 @@ serve(async (req) => {
     let previewTag: string = '';
     let sendCorrection = false;
     let sendMesaNotice = false;
+    // Numero de WhatsApp que figura en la ficha. Se pasa cuando ese numero
+    // rebota: el correo de mesa es el unico canal que queda para avisarle, y
+    // de paso se le pide el numero bueno.
+    let phoneCheck: string | null = null;
     let onlyEmails: string[] | null = null;
     try {
       const body = await req.json();
@@ -693,6 +713,7 @@ serve(async (req) => {
       if (body && typeof body.preview_tag === 'string') previewTag = body.preview_tag;
       if (body && body.send_correction === true) sendCorrection = true;
       if (body && body.mesa_notice === true) sendMesaNotice = true;
+      if (body && typeof body.phone_check === 'string' && body.phone_check.length > 0) phoneCheck = body.phone_check;
       if (body && Array.isArray(body.only_emails) && body.only_emails.length > 0) {
         onlyEmails = body.only_emails.map((e: string) => e.toLowerCase());
       }
@@ -724,8 +745,8 @@ serve(async (req) => {
             if (!user?.email) continue;
             if (onlyEmails && !onlyEmails.includes(user.email.toLowerCase())) continue;
             const firstName = (user.name || '').trim().split(' ')[0] || 'ahi';
-            const built = buildMesaNoticeText(firstName, eventData);
-            const { ok, errorText } = await sendEmail(user.email, built.subject, built.text, built.html);
+            const built = buildMesaNoticeText(firstName, eventData, phoneCheck);
+            const { ok, errorText } = await sendEmail(user.email, built.subject, built.text, built.html, phoneCheck ? SOPORTE_EMAIL : undefined);
             results.push({ block: 'mesa_notice', appointmentId: apt.id, to: user.email, ok, errorText });
           }
         }
