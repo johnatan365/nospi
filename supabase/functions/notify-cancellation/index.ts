@@ -104,8 +104,23 @@ Deno.serve(async (req: Request) => {
     const {
       userName, userEmail, userPhone,
       eventName, eventDate, eventTime,
-      refunded,
+      refunded, isLate, isSubscription,
     } = body;
+
+    // Antes este correo solo miraba `refunded` y, cuando era false, afirmaba
+    // "cancelaste con menos de 24 horas". Eso era mentira para todo el que
+    // cancelo a tiempo pero no tenia plata que devolver: los suscriptores
+    // (su cupo va incluido, no genera saldo) y las cortesias. A 28 personas
+    // se les dijo que cancelaron tarde cuando habian cancelado con dias de
+    // anticipacion. Ahora el texto se decide con el dato real: si fue tarde
+    // lo dice el servidor (isLate), y la suscripcion tiene su propio texto.
+    const saldoTexto: string = isSubscription
+      ? 'Tu cupo estaba incluido en tu suscripción, así que no había saldo que devolver: solo liberaste el puesto. Tu suscripción sigue activa y puedes inscribirte a otro evento cuando quieras.'
+      : refunded
+        ? 'Como cancelaste con más de 24 horas de anticipación, el saldo quedó disponible en tu cuenta para que lo uses en la asistencia a otro evento.'
+        : isLate
+          ? 'Como la cancelación se hizo con menos de 24 horas de anticipación, no aplicó saldo a favor para otro evento.'
+          : 'Esta asistencia no tenía un pago asociado, así que no hay saldo que reportar.';
 
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
@@ -130,9 +145,13 @@ Deno.serve(async (req: Request) => {
       userEmail ? `Correo: ${userEmail}` : null,
       userPhone ? `Teléfono: ${userPhone}` : null,
       '',
-      refunded
-        ? '⚠️ Canceló con más de 24h de anticipación: se le acreditó saldo a favor para otra cita.'
-        : 'Canceló con menos de 24h de anticipación: no se le acreditó saldo a favor.',
+      isSubscription
+        ? 'Cupo de SUSCRIPCIÓN: solo liberó el puesto, no genera saldo.'
+        : refunded
+          ? 'Canceló con más de 24h de anticipación: se le acreditó saldo a favor para otra cita.'
+          : isLate
+            ? '⚠️ Canceló con MENOS de 24h de anticipación: no se le acreditó saldo a favor.'
+            : 'Canceló a tiempo, pero la asistencia no tenía pago asociado: no hay saldo.',
     ].filter((line) => line !== null).join('\n');
 
     const adminRes = await fetch('https://api.resend.com/emails', {
@@ -157,9 +176,7 @@ Deno.serve(async (req: Request) => {
         `Fecha: ${formattedDate}`,
         formattedTime ? `Hora: ${formattedTime}` : null,
         '',
-        refunded
-          ? 'Como cancelaste con más de 24 horas de anticipación, el saldo quedó disponible en tu cuenta para que lo uses en la asistencia a otro evento.'
-          : 'Como la cancelación se hizo con menos de 24 horas de anticipación, no aplicó saldo a favor para otro evento.',
+        saldoTexto,
         '',
         'Si fue un error o quieres inscribirte a otro evento, puedes hacerlo desde la app cuando quieras.',
         '',
@@ -171,9 +188,7 @@ Deno.serve(async (req: Request) => {
         htmlParagraph(`Hola ${firstName},`),
         htmlParagraph(`Te confirmamos que cancelaste tu cupo para <strong>"${eventName || 'el evento'}"</strong>.`),
         htmlParagraph(`Fecha: <strong>${formattedDate}</strong>${formattedTime ? ` · Hora: <strong>${formattedTime}</strong>` : ''}`),
-        refunded
-          ? htmlParagraph('Como cancelaste con más de 24 horas de anticipación, el saldo quedó disponible en tu cuenta para que lo uses en la asistencia a otro evento.', { muted: true })
-          : htmlParagraph('Como la cancelación se hizo con menos de 24 horas de anticipación, no aplicó saldo a favor para otro evento.', { muted: true }),
+        htmlParagraph(saldoTexto, { muted: true }),
         htmlParagraph('¡Nos pillamos en la próxima! 😊'),
       ].join('');
       const userHtml = wrapBrandedHtml(userBodyHtml, 'https://app.nospi.co', 'Ver eventos disponibles');
