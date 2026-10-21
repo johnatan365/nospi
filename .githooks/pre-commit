@@ -35,6 +35,10 @@ buscar "Llave privada de Wompi"            'prv_(prod|test)_[A-Za-z0-9]{10,}'
 buscar "Llave de Resend"                   're_[A-Za-z0-9]{20,}'
 buscar "JWT service_role de Supabase"      '"role" *: *"service_role"'
 buscar "Secreto de webhook propio"         'nospi_[a-z]+_wh[_a-z]*_[A-Za-z0-9]{6,}'
+# Un secreto compartido cualquiera asignado a una constante en mayusculas:
+# CRON_SECRET, WEBHOOK_SECRET, API_KEY, TOKEN... Atrapa los que no siguen
+# ningun patron reconocible, como el CRON_SECRET que estuvo publico.
+buscar "Secreto asignado en el codigo"     '(SECRET|TOKEN|API_KEY|PASSWORD|PRIVATE_KEY)[A-Z_]* *= *.[A-Za-z0-9_/+-]{16,}.'
 buscar "Token de GitHub"                   'gh[pousr]_[A-Za-z0-9]{20,}'
 buscar "Token de Expo"                     'eas_[A-Za-z0-9]{20,}|expo_[A-Za-z0-9]{20,}'
 buscar "Llave de Google"                   'AIza[0-9A-Za-z_-]{30,}'

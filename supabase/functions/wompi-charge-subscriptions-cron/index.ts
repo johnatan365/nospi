@@ -44,7 +44,6 @@ const WOMPI_INTEGRITY_KEY = Deno.env.get('WOMPI_INTEGRITY_KEY') || '';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const CRON_SECRET = 'vNaLuI2S0SwQzCxXgO6WEKMp5RaBamOAOog6AJCNyq4';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const ADMIN_EMAIL = 'nospisocial@gmail.com';
 const MAX_FAILED_ATTEMPTS = 3;
@@ -369,13 +368,40 @@ async function sendRenewalSuccessEmails(
   await sendEmail(ADMIN_EMAIL, adminSubject, adminText);
 }
 
+// El secreto que protege esta funcion NO va escrito aqui: el repositorio es
+// publico. Vive en una sola fila de app_config, generada dentro de la base, y
+// lo leen los dos extremos: el job de pg_cron al disparar y esta funcion al
+// validar. Para rotarlo basta con cambiar ese valor; no hay que tocar codigo
+// ni desplegar nada. Ver CLAUDE.md.
+//
+// Se compara con timingSafeEqual para no filtrar el secreto por el tiempo que
+// tarda la comparacion.
+function comparacionSegura(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  if (ea.length !== eb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ea.length; i++) diff |= ea[i] ^ eb[i];
+  return diff === 0;
+}
+
 Deno.serve(async (req: Request) => {
-  const secretHeader = req.headers.get('x-cron-secret');
-  if (secretHeader !== CRON_SECRET) {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  const secretHeader = req.headers.get('x-cron-secret') || '';
+  const { data: secretRow } = await supabase
+    .from('app_config')
+    .select('value')
+    .eq('key', 'cron_secret')
+    .maybeSingle();
+  const cronSecret = String(secretRow?.value || '');
+  // Si la fila no existe se rechaza todo: es preferible saltarse una corrida
+  // de cobros que dejar la funcion abierta a cualquiera.
+  if (!cronSecret || !comparacionSegura(secretHeader, cronSecret)) {
+    console.error('wompi-charge-subscriptions-cron: secreto invalido o sin configurar, peticion rechazada');
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const now = new Date();
 
   const allEvents = await fetchUpcomingEvents(supabase, now);
