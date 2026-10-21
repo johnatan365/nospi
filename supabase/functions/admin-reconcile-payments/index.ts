@@ -141,6 +141,15 @@ Deno.serve(async (req: Request) => {
         });
         const json = await resp.json();
         const liveStatus = json?.data?.status;
+        // Queda en el registro si Wompi acepto la llave. Sin esto, una llave
+        // mala falla en silencio: las consultas devuelven 401, liveStatus
+        // queda indefinido, y el panel reporta "revisados, 0 cambios" igual
+        // que cuando todo salio bien.
+        if (resp.status !== 200) {
+          console.error(`wompi-reconcile: Wompi respondio ${resp.status} para ${attempt.transaction_id}`);
+        } else {
+          console.log(`wompi-reconcile: Wompi OK (${resp.status}) estado=${liveStatus ?? 'sin estado'}`);
+        }
         if (!liveStatus || liveStatus === attempt.status) {
           results.push({ transaction_id: attempt.transaction_id, unchanged: true, status: attempt.status });
           continue;
