@@ -1,0 +1,60 @@
+#!/bin/sh
+# Bloquea el commit si lo que se va a subir trae un secreto en texto plano.
+#
+# Este repositorio es PUBLICO y git guarda el historial para siempre: un
+# secreto comiteado queda expuesto aunque despues se borre del archivo.
+# Ver CLAUDE.md.
+#
+# Activar en una copia nueva:  git config core.hooksPath .githooks
+
+fallo=0
+
+reportar() {
+  if [ "$fallo" -eq 0 ]; then
+    echo ""
+    echo "  COMMIT BLOQUEADO: hay un secreto en texto plano."
+    echo "  Este repositorio es publico. Ver CLAUDE.md."
+    echo ""
+  fi
+  fallo=1
+  echo "  -> $1"
+  echo "$2" | sed 's/^/     /'
+  echo ""
+}
+
+buscar() {
+  # $1 = descripcion, $2 = regex
+  encontrado=$(git diff --cached --no-color -U0 -- . ':(exclude).githooks/pre-commit' ':(exclude)CLAUDE.md' \
+               | grep -n '^+' | grep -vE '^[0-9]+:\+\+\+' | grep -E "$2" \
+               | sed -E 's/(prv_(prod|test)_[A-Za-z0-9]{6}|re_[A-Za-z0-9]{6}|nospi_[a-z]+_wh[_a-z]*_?[A-Za-z0-9]{4})[A-Za-z0-9]+/\1…[CORTADO]/g' \
+               | head -4)
+  [ -n "$encontrado" ] && reportar "$1" "$encontrado"
+}
+
+buscar "Llave privada de Wompi"            'prv_(prod|test)_[A-Za-z0-9]{10,}'
+buscar "Llave de Resend"                   're_[A-Za-z0-9]{20,}'
+buscar "JWT service_role de Supabase"      '"role" *: *"service_role"'
+buscar "Secreto de webhook propio"         'nospi_[a-z]+_wh[_a-z]*_[A-Za-z0-9]{6,}'
+buscar "Token de GitHub"                   'gh[pousr]_[A-Za-z0-9]{20,}'
+buscar "Token de Expo"                     'eas_[A-Za-z0-9]{20,}|expo_[A-Za-z0-9]{20,}'
+buscar "Llave de Google"                   'AIza[0-9A-Za-z_-]{30,}'
+buscar "Llave de OpenAI/Anthropic"         'sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9-]{20,}'
+
+# Archivos que no deberian entrar nunca
+prohibidos=$(git diff --cached --name-only --diff-filter=A \
+             | grep -E '(^|/)\.env($|\.)|(^|/)[^/]*\.(pem|p12|keystore|jks|mobileprovision)$|google-services\.json|AuthKey_.*\.p8')
+if [ -n "$prohibidos" ]; then
+  reportar "Archivo con credenciales" "$prohibidos"
+fi
+
+if [ "$fallo" -eq 1 ]; then
+  echo "  Saca el secreto del archivo y leelo de una variable de entorno:"
+  echo "    const X = Deno.env.get('X') || '';   // sin valor por defecto"
+  echo ""
+  echo "  El valor va en Supabase > Project Settings > Edge Functions > Secrets."
+  echo "  NO uses --no-verify para saltarte esto."
+  echo ""
+  exit 1
+fi
+
+exit 0

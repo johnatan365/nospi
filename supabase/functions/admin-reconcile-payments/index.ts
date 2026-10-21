@@ -15,7 +15,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const WOMPI_PRIVATE_KEY = 'prv_prod_r8NTduTEKXxzoLZv302Gw4i9jC0lerlK';
+// Las llaves de Wompi NO van escritas aqui: este repositorio es publico.
+// Se cargan en Supabase > Project Settings > Edge Functions > Secrets.
+// Sin valor por defecto a proposito: un respaldo en el codigo seria el
+// mismo error. Ver CLAUDE.md.
+const WOMPI_PRIVATE_KEY = Deno.env.get('WOMPI_PRIVATE_KEY') || '';
 const WOMPI_API_URL = 'https://production.wompi.co/v1';
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
