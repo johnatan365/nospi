@@ -133,6 +133,8 @@ Deno.serve(async (req: Request) => {
     const toCheck = [...(pending || []), ...negativeToCheck];
 
     const results: any[] = [];
+    let wompiOk = 0;
+    let wompiFallo = 0;
 
     for (const attempt of toCheck) {
       try {
@@ -146,8 +148,10 @@ Deno.serve(async (req: Request) => {
         // queda indefinido, y el panel reporta "revisados, 0 cambios" igual
         // que cuando todo salio bien.
         if (resp.status !== 200) {
+          wompiFallo++;
           console.error(`wompi-reconcile: Wompi respondio ${resp.status} para ${attempt.transaction_id}`);
         } else {
+          wompiOk++;
           console.log(`wompi-reconcile: Wompi OK (${resp.status}) estado=${liveStatus ?? 'sin estado'}`);
         }
         if (!liveStatus || liveStatus === attempt.status) {
@@ -171,15 +175,21 @@ Deno.serve(async (req: Request) => {
           appointmentConfirmed: liveStatus === 'APPROVED',
         });
       } catch (e: any) {
+        wompiFallo++;
+        console.error(`wompi-reconcile: error de red con ${attempt.transaction_id}: ${e.message}`);
         results.push({ transaction_id: attempt.transaction_id, error: e.message });
       }
     }
+
+    console.log(`wompi-reconcile: RESUMEN -> consultas OK=${wompiOk} fallidas=${wompiFallo} de ${toCheck.length}`);
 
     return new Response(JSON.stringify({
       success: true,
       checked: toCheck.length,
       pendientes: (pending || []).length,
       rechazadosReverificados: negativeToCheck.length,
+      wompiOk,
+      wompiFallo,
       results,
     }), {
       status: 200,
