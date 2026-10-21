@@ -153,14 +153,23 @@ export function FichaPersona({
 
   return (
     <Modal visible={!!persona} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableOpacity style={estilos.fondo} activeOpacity={1} onPress={onClose}>
+      <View style={estilos.fondo}>
+        {/* El fondo que cierra al tocar va DETRAS de la hoja, no envolviendola.
+            Antes la hoja y su ScrollView eran hijos de dos TouchableOpacity
+            anidados, y en una ficha larga --muchos intereses-- el gesto de
+            arrastrar se lo quedaba el TouchableOpacity en vez del ScrollView:
+            la ficha no bajaba y el boton de "Escribir por privado", que va al
+            final del pie, quedaba inalcanzable. Con el fondo como hermano
+            absoluto, el ScrollView es el unico que responde al arrastre. */}
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('comun.cerrar')}
+        />
         {/* El paddingBottom incluye insets.bottom: sin eso, en Android el boton
             queda pegado a la barra de navegacion y casi no hay donde tocarlo. */}
-        <TouchableOpacity
-          style={[estilos.hoja, { width: anchoHoja, maxHeight: height * 0.92 }]}
-          activeOpacity={1}
-          onPress={() => {}}
-        >
+        <View style={[estilos.hoja, { width: anchoHoja, maxHeight: height * 0.92 }]}>
           {/* Con scroll: en una ventana baja (o en un telefono pequeno con
               muchos intereses) el boton de Cerrar quedaba por fuera y no habia
               como salir sino tocando el fondo. */}
@@ -174,6 +183,10 @@ export function FichaPersona({
             // fotos y muchos intereses-- y en ventanas bajas.
             style={{ flexGrow: 0, flexShrink: 1 }}
             contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            // Android: sin esto el arrastre se pierde cuando la hoja esta
+            // dentro de otro contenedor que tambien puede desplazarse.
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
           >
           <View style={[estilos.marcoFoto, { height: altoFoto }]}>
             {fotos.length > 0 ? (
@@ -337,8 +350,8 @@ export function FichaPersona({
           >
             <Text style={estilos.equisTexto}>✕</Text>
           </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </View>
+      </View>
     </Modal>
   );
 }
