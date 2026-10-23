@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, useWindowDimensions, ScrollView,
 } from 'react-native';
@@ -84,10 +84,15 @@ export function FichaPersona({
   const { idioma, t } = useIdioma();
   const { width, height } = useWindowDimensions();
   const [indice, setIndice] = useState(0);
+  const carrusel = useRef<ScrollView | null>(null);
 
   // Al abrir la ficha de otra persona se vuelve a la primera foto: si no, se
-  // quedaba en la foto 3 de la anterior y se veia un hueco.
-  useEffect(() => { setIndice(0); }, [persona?.user_id]);
+  // quedaba en la foto 3 de la anterior y se veia un hueco. El carrusel hay
+  // que devolverlo a mano: su posicion no la manda el estado.
+  useEffect(() => {
+    setIndice(0);
+    carrusel.current?.scrollTo({ x: 0, animated: false });
+  }, [persona?.user_id]);
 
   // El perfil completo se pide al abrir la ficha, no en las listas.
   //
@@ -146,6 +151,27 @@ export function FichaPersona({
   const altoFoto = Math.round(anchoHoja * 1.1);
   const hayVarias = fotos.length > 1;
 
+  // Precargar TODAS las fotos apenas se abre la ficha.
+  //
+  // Antes solo existia la foto que se estaba viendo: la siguiente empezaba a
+  // bajarse en el momento en que la pedias, y mientras tanto expo-image seguia
+  // pintando la anterior. Se veia como si la ficha se hubiera quedado pegada en
+  // la primera. Son maximo seis fotos ya reducidas a 1080 px, asi que pedirlas
+  // de una no pesa y el cambio se siente instantaneo.
+  useEffect(() => {
+    if (fotos.length > 1) ExpoImage.prefetch(fotos, { cachePolicy: 'memory-disk' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fotos.join('|')]);
+
+  // Mover el carrusel y el indice a la vez. Las flechas lo llaman; el gesto de
+  // deslizar actualiza el indice solo, al terminar de moverse.
+  const irA = (i: number) => {
+    if (!fotos.length) return;
+    const n = ((i % fotos.length) + fotos.length) % fotos.length;
+    setIndice(n);
+    carrusel.current?.scrollTo({ x: n * anchoHoja, animated: true });
+  };
+
   const subtitulo = [
     typeof p?.edad === 'number' ? `${p.edad} años` : null,
     p?.city?.trim() || null,
@@ -190,13 +216,38 @@ export function FichaPersona({
           >
           <View style={[estilos.marcoFoto, { height: altoFoto }]}>
             {fotos.length > 0 ? (
-              <ExpoImage
-                source={{ uri: fotos[Math.min(indice, fotos.length - 1)] }}
-                style={estilos.foto}
-                cachePolicy="memory-disk"
-                transition={160}
-                contentFit="cover"
-              />
+              <ScrollView
+                ref={carrusel}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                // Todas las fotos montadas a la vez, una al lado de la otra.
+                //
+                // Antes habia UN solo recuadro al que se le cambiaba la
+                // direccion: cada paso era esperar una descarga completa
+                // viendo la foto anterior. Ahora ya estan todas puestas, el
+                // paso es instantaneo, y volver atras tambien.
+                //
+                // Y de paso esto es lo que hace que DESLIZAR funcione: antes
+                // las fotos solo cambiaban tocando, y quien hacia el gesto de
+                // siempre no lograba nada y creia que habia una sola foto.
+                onMomentumScrollEnd={(e) => {
+                  const i = Math.round(e.nativeEvent.contentOffset.x / anchoHoja);
+                  setIndice(Math.max(0, Math.min(i, fotos.length - 1)));
+                }}
+                style={{ width: anchoHoja, height: altoFoto }}
+              >
+                {fotos.map((uri, i) => (
+                  <ExpoImage
+                    key={`${uri}-${i}`}
+                    source={{ uri }}
+                    style={{ width: anchoHoja, height: altoFoto }}
+                    cachePolicy="memory-disk"
+                    transition={160}
+                    contentFit="cover"
+                  />
+                ))}
+              </ScrollView>
             ) : porDefecto ? (
               <View style={estilos.sinFoto}>
                 <ExpoImage source={porDefecto} style={estilos.sinFotoAvatar} contentFit="contain" />
@@ -218,7 +269,7 @@ export function FichaPersona({
             {/* Barritas tipo historia: dicen cuantas fotos hay sin tener que
                 deslizar a ciegas para averiguarlo. */}
             {hayVarias && (
-              <View style={estilos.barritas}>
+              <View style={estilos.barritas} pointerEvents="none">
                 {fotos.map((_, i) => (
                   <View
                     key={i}
@@ -235,23 +286,29 @@ export function FichaPersona({
                 "esto se mueve" y el "1/4" dice cuantas faltan. */}
             {hayVarias && (
               <>
+                {/* Las flechas ya NO ocupan media foto cada una.
+                    Antes eran dos zonas invisibles del ancho de media ficha, y
+                    puestas encima del carrusel se tragaban el arrastre: habria
+                    quedado el mismo problema de siempre, deslizar sin que pase
+                    nada. Ahora son dos franjas angostas en los bordes y el
+                    centro de la foto queda libre para deslizar. */}
                 <Pressable
-                  style={[estilos.zonaToque, { left: 0 }]}
+                  style={[estilos.flechaToque, { left: 0 }]}
                   accessibilityRole="button"
                   accessibilityLabel={t('ficha.fotoAnterior')}
-                  onPress={() => setIndice((i) => (i - 1 + fotos.length) % fotos.length)}
+                  onPress={() => irA(indice - 1)}
                 >
-                  <View style={[estilos.flecha, { marginLeft: 10 }]}>
+                  <View style={estilos.flecha}>
                     <Text style={estilos.flechaTexto}>‹</Text>
                   </View>
                 </Pressable>
                 <Pressable
-                  style={[estilos.zonaToque, estilos.zonaDerecha, { right: 0 }]}
+                  style={[estilos.flechaToque, { right: 0 }]}
                   accessibilityRole="button"
                   accessibilityLabel={t('ficha.fotoSiguiente')}
-                  onPress={() => setIndice((i) => (i + 1) % fotos.length)}
+                  onPress={() => irA(indice + 1)}
                 >
-                  <View style={[estilos.flecha, { marginRight: 10 }]}>
+                  <View style={estilos.flecha}>
                     <Text style={estilos.flechaTexto}>›</Text>
                   </View>
                 </Pressable>
@@ -382,11 +439,12 @@ const estilos = StyleSheet.create({
   },
   barritaActiva: { backgroundColor: '#FFFFFF' },
 
-  zonaToque: {
-    position: 'absolute', top: 0, bottom: 0, width: '45%',
-    justifyContent: 'center', alignItems: 'flex-start',
+  // Franja angosta en el borde: suficiente para tocar la flecha, sin robarle
+  // el arrastre al carrusel. El centro de la foto queda libre.
+  flechaToque: {
+    position: 'absolute', top: 0, bottom: 0, width: 56,
+    alignItems: 'center', justifyContent: 'center',
   },
-  zonaDerecha: { alignItems: 'flex-end' },
   flecha: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.32)',
