@@ -74,6 +74,7 @@ import * as FileSystem from 'expo-file-system';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import * as Notifications from 'expo-notifications';
 import * as WebBrowser from 'expo-web-browser';
+import { WebView } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase';
 import { useIdioma } from '@/contexts/IdiomaContext';
@@ -1920,6 +1921,9 @@ export default function ChatThreadScreen() {
   // Archivo sobre el que se abrio el menu de Descargar / Compartir.
   const [mediaActions, setMediaActions] = useState<{ url: string; kind: 'image' | 'video'; filename: string } | null>(null);
   const [busyAction, setBusyAction] = useState<null | 'download' | 'share'>(null);
+  // Id del mensaje cuyo video se esta reproduciendo. Uno solo a la vez: abrir
+  // otro apaga el anterior, que ademas es lo que uno espera en un chat.
+  const [videoSonando, setVideoSonando] = useState<string | null>(null);
   // Adjuntos elegidos que todavia NO se han enviado: se quedan en la bandeja
   // hasta que la persona toca el boton de enviar.
   const [pendingAssets, setPendingAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
@@ -3754,6 +3758,25 @@ export default function ChatThreadScreen() {
     setZoomedPhoto(url);
   };
 
+  // Reproductor dentro de la burbuja, sin sacar a nadie del chat.
+  //
+  // No hace falta libreria nativa nueva: react-native-webview YA viene en la
+  // app (lo usa el mapa), asi que esto viaja por OTA. Antes tocar el video
+  // mandaba al navegador del sistema, que reproduce pero saca de la
+  // conversacion.
+  //
+  // El WebView se monta SOLO al tocar, nunca antes: si cada video de la
+  // conversacion trajera el suyo, el chat se volveria pesadisimo al
+  // desplazarse.
+  const htmlDelVideo = (url: string) => `<!doctype html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}
+video{width:100%;height:100%;object-fit:contain;display:block}</style>
+</head><body>
+<video src="${url.replace(/"/g, '&quot;')}" controls autoplay playsinline webkit-playsinline preload="metadata"></video>
+</body></html>`;
+
   const openVideo = async (url: string) => {
     try {
       if (Platform.OS === 'web') {
@@ -4523,18 +4546,58 @@ export default function ChatThreadScreen() {
                           </View>
                         );
                       }
+                      // Ya lo tocaron: la caja se convierte en el reproductor,
+                      // aqui mismo en la burbuja.
+                      if (videoSonando === item.id) {
+                        return (
+                          // alignItems/justifyContent del contenedor van en
+                          // 'stretch': mediaVideoBox centra a sus hijos --para
+                          // el circulito de play-- y eso le dejaria el ancho en
+                          // cero al reproductor. Ademas se le dan medidas
+                          // explicitas, que es lo unico que un WebView respeta
+                          // sin falta.
+                          <View style={[styles.mediaVideoBox, box, ladoDelMedio,
+                                        { overflow: 'hidden', alignItems: 'stretch', justifyContent: 'flex-start' }]}>
+                            <WebView
+                              source={{ html: htmlDelVideo(url) }}
+                              style={{ width: box.width, height: box.height, backgroundColor: '#000' }}
+                              // iOS: sin esto el video se va a pantalla completa
+                              // solo, que es justo lo que estamos evitando.
+                              allowsInlineMediaPlayback
+                              // El toque de la persona YA fue el permiso; pedir
+                              // otro la obligaria a tocar play dos veces.
+                              mediaPlaybackRequiresUserAction={false}
+                              allowsFullscreenVideo
+                              scrollEnabled={false}
+                              originWhitelist={['*']}
+                              // Si el WebView no logra pintar el video, al menos
+                              // queda la salida de siempre en vez de un cuadro
+                              // negro muerto.
+                              onError={() => { setVideoSonando(null); openVideo(url); }}
+                            />
+                            <TouchableOpacity
+                              style={styles.videoCerrar}
+                              onPress={() => setVideoSonando(null)}
+                              accessibilityRole="button"
+                              accessibilityLabel={t('comun.cerrar')}
+                            >
+                              <Text style={styles.videoCerrarTexto}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      }
                       return (
                         <TouchableOpacity
                           activeOpacity={0.85}
-                          // Tocar REPRODUCE. Antes abria una hoja con tres
-                          // opciones donde "Reproducir" estaba al lado de
+                          // Tocar reproduce AQUI MISMO. Antes abria una hoja con
+                          // tres opciones donde "Reproducir" quedaba al lado de
                           // "Descargar", y descargar se baja el archivo entero
-                          // antes de hacer nada: con un video de 25 MB eso son
-                          // decenas de segundos de pantalla muerta y parece que
-                          // la app se colgo. El boton de play tiene que hacer lo
-                          // que dibuja.
-                          onPress={() => openVideo(url)}
-                          // Descargar y compartir siguen ahi, mantemiendo pulsado.
+                          // antes de hacer nada: con 25 MB son decenas de
+                          // segundos de pantalla muerta y parece que la app se
+                          // colgo. Despues de eso mandaba al navegador del
+                          // sistema, que reproduce pero saca de la conversacion.
+                          onPress={() => setVideoSonando(item.id)}
+                          // Descargar y compartir siguen ahi, manteniendo pulsado.
                           onLongPress={() => setMediaActions({ url, kind: 'video', filename: mediaFileName(item.media_path, 'video') })}
                           delayLongPress={300}
                           style={[styles.mediaVideoBox, box, ladoDelMedio]}
@@ -6707,6 +6770,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  videoCerrar: {
+    position: 'absolute', top: 6, right: 6,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  videoCerrarTexto: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 17 },
   mediaVideoBox: {
     borderRadius: 12,
     marginBottom: 6,
