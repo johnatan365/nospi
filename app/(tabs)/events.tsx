@@ -147,7 +147,18 @@ export default function EventsScreen() {
         .from('appointments')
         .select('event_id')
         .eq('user_id', user.id)
-        .in('status', ['confirmada', 'anterior', 'cancelada']),
+        // Las CANCELADAS no cuentan.
+        //
+        // Estaban aqui, y por eso cancelar un evento lo borraba del listado
+        // para siempre: la persona lo veia en "citas canceladas" pero no tenia
+        // por donde volver a entrar, porque el evento ya no le aparecia en
+        // Eventos. No habia forma de reinscribirse nunca.
+        //
+        // La pantalla de detalle YA sabe reinscribir --encuentra la fila
+        // cancelada y la actualiza en vez de insertar otra, que chocaria con el
+        // unico de (user_id, event_id)--. Lo unico que faltaba era dejar llegar
+        // a la persona hasta ahi.
+        .in('status', ['confirmada', 'anterior']),
       supabase
         .from('events')
         .select('id, name, subtitulo, name_en, description_en, city, cities, nacional, ocultar_ciudad, description, type, date, time, max_participants, event_status, is_full, is_location_revealed, registration_closed_men, registration_closed_women, location, location_name, location_address, maps_link, price')
