@@ -3507,6 +3507,17 @@ export default function ChatThreadScreen() {
       selectionLimit: 10,
       quality: 1,
       exif: false,
+      // 720p y un minuto de tope para los videos.
+      //
+      // Un clip de 5 segundos grabado en 4K con un iPhone pesa 25 MB: raspa el
+      // tope de 25 MB del bucket, tarda una eternidad en subir y otra en
+      // abrirse, y nadie nota la diferencia viendolo en un telefono. A 720p ese
+      // mismo clip queda en unos pocos MB.
+      //
+      // videoQuality solo lo respeta iOS; en Android el selector no deja pedir
+      // resolucion. Alla sigue mandando el tope de 25 MB, que ya existia.
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.IFrame1280x720,
+      videoMaxDuration: 60,
     });
     if (!result.canceled && result.assets?.length) {
       // Se filtran los que pasan del tope ANTES de meterlos en la bandeja, para
@@ -3656,6 +3667,17 @@ export default function ChatThreadScreen() {
       allowsEditing: false,
       quality: 1,
       exif: false,
+      // 720p y un minuto de tope para los videos.
+      //
+      // Un clip de 5 segundos grabado en 4K con un iPhone pesa 25 MB: raspa el
+      // tope de 25 MB del bucket, tarda una eternidad en subir y otra en
+      // abrirse, y nadie nota la diferencia viendolo en un telefono. A 720p ese
+      // mismo clip queda en unos pocos MB.
+      //
+      // videoQuality solo lo respeta iOS; en Android el selector no deja pedir
+      // resolucion. Alla sigue mandando el tope de 25 MB, que ya existia.
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.IFrame1280x720,
+      videoMaxDuration: 60,
     });
     if (!result.canceled && result.assets?.[0]) {
       const nuevo = result.assets[0];
@@ -4504,7 +4526,17 @@ export default function ChatThreadScreen() {
                       return (
                         <TouchableOpacity
                           activeOpacity={0.85}
-                          onPress={() => setMediaActions({ url, kind: 'video', filename: mediaFileName(item.media_path, 'video') })}
+                          // Tocar REPRODUCE. Antes abria una hoja con tres
+                          // opciones donde "Reproducir" estaba al lado de
+                          // "Descargar", y descargar se baja el archivo entero
+                          // antes de hacer nada: con un video de 25 MB eso son
+                          // decenas de segundos de pantalla muerta y parece que
+                          // la app se colgo. El boton de play tiene que hacer lo
+                          // que dibuja.
+                          onPress={() => openVideo(url)}
+                          // Descargar y compartir siguen ahi, mantemiendo pulsado.
+                          onLongPress={() => setMediaActions({ url, kind: 'video', filename: mediaFileName(item.media_path, 'video') })}
+                          delayLongPress={300}
                           style={[styles.mediaVideoBox, box, ladoDelMedio]}
                         >
                           <View style={styles.mediaPlayCircle}>
