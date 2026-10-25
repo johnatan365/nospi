@@ -1065,7 +1065,7 @@ export default function AdminPanelScreen() {
   // --y con el, una consulta de hasta 2000 filas en cada carga del panel--,
   // porque ocupaba la parte de arriba de la pestaña todos los dias para un dato
   // que se consulta de vez en cuando. Se pide cuando haga falta.
-  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'virtual'>('all');
+  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'baile' | 'virtual'>('all');
   const [eventSearch, setEventSearch] = useState('');
   // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
   // ascendente (los más próximos a venir primero); las demás pestañas en
@@ -7765,7 +7765,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             ) : groupChats.map(g => {
               const on = g.conversation_id === activeGroupChatId;
               const emoji = g.event_type === 'virtual' ? '🎥' : g.event_type === 'bar' ? '🍸' : g.event_type === 'caminata' ? '🚶'
-                : g.event_type === 'cafe' ? '☕' : g.event_type === 'bolos' ? '🎳' : '🍽️';
+                : g.event_type === 'cafe' ? '☕' : g.event_type === 'bolos' ? '🎳' : g.event_type === 'baile' ? '💃' : '🍽️';
               return (
                 <TouchableOpacity
                   key={g.conversation_id}
@@ -9640,6 +9640,7 @@ setBulkWhatsAppPending(pending);
             <option value="caminata">Caminata</option>
             <option value="bolos">Bolos</option>
             <option value="bar">Bar</option>
+            <option value="baile">Baile</option>
           </select>
           <button
             onClick={() => setEventSortDesc((v) => !v)}
@@ -9652,7 +9653,7 @@ setBulkWhatsAppPending(pending);
         </div>
 
         {filteredEvents.map((event) => {
-          const eventTypeText = event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
+          const eventTypeText = event.type === 'baile' ? 'Baile' : event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           
@@ -12909,7 +12910,11 @@ setBulkWhatsAppPending(pending);
                 onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
               >
                 <option value="bar">Bar</option>
-                <option value="restaurant">Restaurante</option><option value="caminata">Caminata</option><option value="cafe">Café</option><option value="bolos">Bolos</option><option value="virtual">Videollamada</option>
+                <option value="baile">Baile</option>
+                {/* Decia value="restaurant" (sin la e). Ese valor no pasa la
+                    restriccion de events.type en la base, asi que guardar un
+                    evento elegido por aqui como Restaurante fallaba. */}
+                <option value="restaurante">Restaurante</option><option value="caminata">Caminata</option><option value="cafe">Café</option><option value="bolos">Bolos</option><option value="virtual">Videollamada</option>
               </select>
 
               <Text style={styles.inputLabel}>Fecha</Text>

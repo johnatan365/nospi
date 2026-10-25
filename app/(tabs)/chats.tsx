@@ -64,7 +64,7 @@ function timeAgo(iso: string | null, idioma: Idioma): string {
 }
 
 function eventEmoji(eventType: string | null): string {
-  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : '🍽️';
+  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : '🍽️';
 }
 
 // Mismos íconos PNG que usa la pestaña de Eventos. El require debe ser estático
@@ -72,7 +72,9 @@ function eventEmoji(eventType: string | null): string {
 function eventIconSource(eventType: string | null) {
   switch (eventType) {
     case 'caminata': return require('@/assets/images/icon-caminata.png');
-    case 'bar': return require('@/assets/images/icon-bar.png');
+    // 'baile' reusa el icono de bar hasta que llegue el suyo propio.
+    case 'bar':
+    case 'baile': return require('@/assets/images/icon-bar.png');
     case 'cafe': return require('@/assets/images/icon-cafe.png');
     case 'bolos': return require('@/assets/images/icon-bolos.png');
     case 'virtual': return require('@/assets/images/icon-videollamada.png');

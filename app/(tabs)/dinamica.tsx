@@ -2205,8 +2205,8 @@ export default function DinamicaScreen() {
     );
   }
 
-  const eventTypeText = t(['bar', 'caminata', 'cafe', 'bolos', 'virtual'].includes(appointment.event.type) ? `evento.tipo.${appointment.event.type}` : 'evento.tipo.restaurante');
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : '🍽️';
+  const eventTypeText = t(['bar', 'baile', 'caminata', 'cafe', 'bolos', 'virtual'].includes(appointment.event.type) ? `evento.tipo.${appointment.event.type}` : 'evento.tipo.restaurante');
+  const eventIcon = appointment.event.type === 'bar'|| appointment.event.type === 'baile' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : appointment.event.type === 'baile' ? '💃' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;

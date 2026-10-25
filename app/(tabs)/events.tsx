@@ -317,7 +317,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionHeader}>{t(CLAVE_SECCION[section] ?? 'eventos.sinFecha')}</Text>
 
                 {sectionEvents.map((event) => {
-                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : '🍽️';
+                  const eventIcon = event.type === 'bar'|| event.type === 'baile' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
                   const esVirtual = event.type === 'virtual';
