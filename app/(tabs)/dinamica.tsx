@@ -2206,7 +2206,7 @@ export default function DinamicaScreen() {
   }
 
   const eventTypeText = t(['bar', 'baile', 'caminata', 'cafe', 'bolos', 'virtual'].includes(appointment.event.type) ? `evento.tipo.${appointment.event.type}` : 'evento.tipo.restaurante');
-  const eventIcon = appointment.event.type === 'bar'|| appointment.event.type === 'baile' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : appointment.event.type === 'baile' ? '💃' : '🍽️';
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : appointment.event.type === 'baile' ? '💃' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
@@ -2249,6 +2249,10 @@ export default function DinamicaScreen() {
               <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
                 <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
+              ) : appointment.event.type === 'baile' ? (
+                <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                  <Image source={require('@/assets/images/icon-baile.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
+                </View>
             ) : appointment.event.type === 'bar' ? (
               <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
                 <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />

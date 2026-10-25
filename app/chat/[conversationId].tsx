@@ -344,9 +344,8 @@ function eventEmoji(eventType: string | null | undefined): string {
 function eventIconSource(eventType: string | null | undefined) {
   switch (eventType) {
     case 'caminata': return require('@/assets/images/icon-caminata.png');
-    // 'baile' reusa el icono de bar hasta que llegue el suyo propio.
-    case 'bar':
-    case 'baile': return require('@/assets/images/icon-bar.png');
+    case 'bar': return require('@/assets/images/icon-bar.png');
+    case 'baile': return require('@/assets/images/icon-baile.png');
     case 'cafe': return require('@/assets/images/icon-cafe.png');
     case 'bolos': return require('@/assets/images/icon-bolos.png');
     case 'virtual': return require('@/assets/images/icon-videollamada.png');

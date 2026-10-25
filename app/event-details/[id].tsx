@@ -427,7 +427,7 @@ export default function EventDetailsScreen() {
   }
 
   const eventTypeText = t(['bar', 'baile', 'caminata', 'cafe', 'bolos', 'virtual'].includes(event.type) ? `evento.tipo.${event.type}` : 'evento.tipo.restaurante');
-  const eventIcon = event.type === 'bar' || event.type === 'baile' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : '🍽️';
+  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : '🍽️';
   const esVirtual = event.type === 'virtual';
   const dateText = formatDate(event.date);
   // Los eventos son de hombres y mujeres. El cierre de registro por genero
@@ -467,7 +467,11 @@ export default function EventDetailsScreen() {
               <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
                 <Image source={require('@/assets/images/icon-caminata.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
-            ) : event.type === 'bar' || event.type === 'baile' ? (
+            ) : event.type === 'baile' ? (
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-baile.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
+              </View>
+            ) : event.type === 'bar' ? (
               <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
                 <Image source={require('@/assets/images/icon-bar.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
@@ -711,7 +715,9 @@ export default function EventDetailsScreen() {
                   </View>
                 ) : event?.type === 'caminata' ? (
                   <Image source={require('@/assets/images/icon-caminata.png')} style={styles.ticketIcon} resizeMode="contain" />
-                ) : event?.type === 'bar' || event?.type === 'baile' ? (
+                ) : event?.type === 'baile' ? (
+                  <Image source={require('@/assets/images/icon-baile.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'bar' ? (
                   <Image source={require('@/assets/images/icon-bar.png')} style={styles.ticketIcon} resizeMode="contain" />
                 ) : event?.type === 'restaurante' ? (
                   <Image source={require('@/assets/images/icon-restaurante.png')} style={styles.ticketIcon} resizeMode="contain" />
