@@ -2143,6 +2143,14 @@ export default function DinamicaScreen() {
               <Text style={styles.rulesEmoji}>👥</Text>
               <Text style={styles.rulesText}>{t('din.enCadaPregunta')}</Text>
             </View>
+            <View style={styles.rulesDivider} />
+            {/* La salida a charla libre se anuncia desde el arranque: el moderador
+                tiene el boton en su pantalla, y la mesa necesita saber que existe
+                para no sentirse amarrada a las 24 preguntas. */}
+            <View style={styles.rulesRow}>
+              <Text style={styles.rulesEmoji}>🗣️</Text>
+              <Text style={styles.rulesText}>{t('din.cuandoQuieranLibre')}</Text>
+            </View>
             {/* Regla de la votación 👍/👎 (U): se anuncia desde el arranque
                 para que la tarjeta de voto no tome a nadie por sorpresa. En
                 videollamada no va: los participantes están en el Meet, no en

@@ -217,6 +217,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
   // tomar el rol desde el botón "Cambiar moderador".
   const [moderatorId, setModeratorId] = useState<string | null>(appointment.event?.moderator_id ?? null);
   const [showChangeModerator, setShowChangeModerator] = useState(false);
+  const [showTerminar, setShowTerminar] = useState(false);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
@@ -658,6 +659,29 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
     setLoading(false);
   }, [appointment, loading]);
 
+  // "Pasar a charla libre" (solo el moderador, durante las preguntas): corta
+  // las preguntas donde vayan y manda a TODA la mesa a la pantalla de cierre,
+  // la misma a la que se llega cuando se acaban las 24.
+  //
+  // Los matches se eligen AHI MISMO y no al final de la charla libre: si se
+  // deja para cuando la mesa se esta parando, la gente se va sin elegir, y el
+  // match es lo que abre los chats y lo que hace que vuelvan.
+  const handlePasarACharlaLibre = useCallback(async () => {
+    if (!appointment?.event_id || loading) return;
+    setLoading(true);
+    setShowTerminar(false);
+    setGamePhase('closing_intro');
+    const { error } = await supabase
+      .from('events')
+      .update({ game_phase: 'closing_intro', updated_at: new Date().toISOString() })
+      .eq('id', appointment.event_id);
+    if (error) {
+      console.error('❌ Error pasando a charla libre:', error);
+      setGamePhase('questions');
+    }
+    setLoading(false);
+  }, [appointment, loading]);
+
   const handleContinue = useCallback(async () => {
 
     if (!appointment?.event_id || loading) return;
@@ -865,6 +889,43 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
 
   // Bottom sheet "Cambiar moderador", compartido por la pantalla de preguntas y
   // la fase libre (cualquiera puede tomar el rol si el moderador se fue).
+  // Bottom sheet de confirmacion de "Pasar a charla libre". No se puede
+  // deshacer, asi que se avisa antes: la mesa entera pierde las preguntas.
+  const terminarSheet = (
+    <Modal
+      visible={showTerminar}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowTerminar(false)}
+    >
+      <TouchableOpacity
+        style={styles.changeOverlay}
+        activeOpacity={1}
+        onPress={() => setShowTerminar(false)}
+      >
+        <TouchableOpacity style={styles.changeSheet} activeOpacity={1} onPress={() => {}}>
+          <Text style={styles.changeSheetTitle}>{t('juego.terminarTitulo')}</Text>
+          <Text style={styles.changeSheetText}>{t('juego.terminarTexto')}</Text>
+
+          <TouchableOpacity
+            style={[styles.changeSheetPrimary, loading && styles.buttonDisabled]}
+            onPress={handlePasarACharlaLibre}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.changeSheetPrimaryText}>
+              {loading ? t('juego.cargando') : t('juego.terminarSi')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setShowTerminar(false)} activeOpacity={0.7}>
+            <Text style={styles.changeSheetCancel}>{t('comun.cancelar')}</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const changeModeratorSheet = (
     <Modal
       visible={showChangeModerator}
@@ -1046,6 +1107,21 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
             </View>
           )}
 
+          {/* Salida a charla libre: SOLO el moderador. En estilo secundario y
+              debajo del avance, para que no le compita al boton de seguir --
+              es una salida, no un atajo. En la ULTIMA pregunta no se muestra:
+              ahi el boton de avanzar ya dice "Terminar" y hace lo mismo. */}
+          {isModerator && !isLastQuestion && (
+            <TouchableOpacity
+              style={styles.charlaLibreBtn}
+              onPress={() => setShowTerminar(true)}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.charlaLibreBtnText}>{t('juego.pasarCharlaLibre')}</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Cambiar moderador: para los DEMAS (tomar el relevo). El moderador
               actual no lo necesita -- ya tiene el control -- y verlo lo
               confundia. Si no hay moderador (dato viejo), se muestra a todos. */}
@@ -1068,6 +1144,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
         </ScrollView>
 
         {changeModeratorSheet}
+        {terminarSheet}
 
         {/* Level Transition Animation Overlay */}
         {showLevelTransition && transitionLevel && (
@@ -1119,6 +1196,9 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                   {t('juego.cierre1')}<Text style={styles.closingIntroStrong}>{esVirtual ? t('juego.todosAppNospi') : t('juego.todosCelular')}</Text>{t('juego.cierre2')}<Text style={styles.closingIntroStrong}>{t('juego.enPrivado')}</Text>{t('juego.conQuienSintio')}
                 </Text>
               </View>
+              {/* Que la noche NO se acaba aqui: sin esto, "saquen el celular y
+                  elijan" se lee como el final del plan y la mesa se levanta. */}
+              <Text style={styles.closingIntroLibreText}>{t('juego.luegoCharlaLibreMod')}</Text>
               <View style={styles.closingIntroThanksCard}>
                 <Text style={styles.closingIntroThanksText}>
                   👏 <Text style={styles.closingIntroStrong}>{t('juego.graciasModerar')}</Text>{t('juego.loHicisteIncreible')}
@@ -1140,6 +1220,7 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
                   📱 <Text style={styles.closingIntroStrong}>{esVirtual ? t('juego.veAppNospi') : t('juego.sacaCelular')}</Text>{t('juego.ahoraVasAElegir')}<Text style={styles.closingIntroStrong}>{t('juego.enPrivado')}</Text>{t('juego.conQuienSentiste')}
                 </Text>
               </View>
+              <Text style={styles.closingIntroLibreText}>{t('juego.luegoCharlaLibre')}</Text>
               <View style={styles.closingIntroThanksCard}>
                 <Text style={styles.closingIntroThanksText}>
                   {t('juego.denleAplauso')}<Text style={styles.closingIntroStrong}>{moderatorName}</Text>{t('juego.queModero')}
@@ -1316,6 +1397,15 @@ const styles = StyleSheet.create({
   closingIntroStrong: {
     color: '#FFD6E8',
     fontWeight: '800',
+  },
+  closingIntroLibreText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.88)',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 14,
+    paddingHorizontal: 6,
   },
   closingIntroThanksCard: {
     backgroundColor: 'rgba(76,175,80,0.14)',
@@ -1638,6 +1728,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: 'rgba(255,255,255,0.75)',
+  },
+  charlaLibreBtn: {
+    marginTop: 2,
+    alignSelf: 'stretch',
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  charlaLibreBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.92)',
   },
   changeOverlay: {
     flex: 1,
