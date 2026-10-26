@@ -1100,11 +1100,23 @@ export default function GameDynamicsScreen({ appointment, activeParticipants, on
               </View>
             )
           ) : (
-            <View style={styles.continueButtonWaitingC}>
-              <Text style={styles.continueButtonTextWaiting}>
-                {t('juego.esperaAQue', { nombre: moderatorName || t('juego.elModerador'), accion: isLastQuestion ? t('juego.termineDinamica') : t('juego.paseSiguiente') })}
-              </Text>
-            </View>
+            <>
+              <View style={styles.continueButtonWaitingC}>
+                <Text style={styles.continueButtonTextWaiting}>
+                  {t('juego.esperaAQue', { nombre: moderatorName || t('juego.elModerador'), accion: isLastQuestion ? t('juego.termineDinamica') : t('juego.paseSiguiente') })}
+                </Text>
+              </View>
+              {/* El boton de salir lo tiene SOLO el moderador, asi que al resto de
+                  la mesa hay que decirle a quien pedirselo. Va en letra chica, al
+                  mismo peso que el texto de espera: informa, no empuja.
+                  En la ULTIMA pregunta no sale -- ahi la dinamica termina igual en
+                  segundos, igual que el boton del moderador. */}
+              {!isLastQuestion && (
+                <Text style={styles.avisoMesaText}>
+                  {t('juego.avisoCharlaLibreMesa', { nombre: moderatorName || t('juego.elModerador') })}
+                </Text>
+              )}
+            </>
           )}
 
           {/* Salida a charla libre: SOLO el moderador. En estilo secundario y
@@ -1728,6 +1740,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: 'rgba(255,255,255,0.75)',
+  },
+  avisoMesaText: {
+    textAlign: 'center',
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.72)',
+    paddingHorizontal: 10,
+    marginTop: -6,
+    marginBottom: 10,
   },
   charlaLibreBtn: {
     marginTop: 2,
