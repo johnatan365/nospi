@@ -53,6 +53,31 @@ export default function ForgotPasswordScreen() {
           ? `${window.location.origin}/auth/callback`
           : 'https://app.nospi.co/auth/callback';
 
+      // Antes se mandaba el correo a ciegas y SIEMPRE se mostraba "revisa tu
+      // correo", existiera la cuenta o no. Quien se equivocaba al escribir
+      // quedaba esperando un enlace que nunca iba a llegar: paso el 27 de
+      // octubre de 2026, alguien lo intento cuatro veces y termino escribiendo
+      // a soporte.
+      //
+      // Ahora se pregunta primero. La funcion del servidor limita a 12
+      // consultas por hora desde el mismo origen y, pasado ese tope, responde
+      // siempre que si existe, para que nadie pueda ir probando listas de
+      // correos y averiguar quien tiene cuenta en Nospi.
+      //
+      // Si la consulta falla por lo que sea, se sigue de largo y se manda el
+      // correo igual: es preferible el mensaje generico de siempre a dejar a
+      // la persona sin poder recuperar su cuenta.
+      try {
+        const { data: tieneCuenta, error: errorConsulta } = await supabaseRecovery
+          .rpc('correo_tiene_cuenta', { p_email: email.trim() });
+        if (!errorConsulta && tieneCuenta === false) {
+          setError(t('pw.correoNoRegistrado'));
+          return;
+        }
+      } catch (e) {
+        console.warn('[ForgotPassword] no se pudo verificar el correo:', e);
+      }
+
       const { error: resetError } = await supabaseRecovery.auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
       });
