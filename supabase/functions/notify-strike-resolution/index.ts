@@ -12,7 +12,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
-const NOSHOW_SECRET = Deno.env.get('NOSHOW_SECRET') || 'nospi_noshow_wh_7f3a9c2e';
 
 function p(txt: string): string {
   return `<p style="margin:0 0 12px;font-size:16px;color:#1f2937;line-height:1.6;font-family:-apple-system,Helvetica,Arial,sans-serif;">${txt}</p>`;
@@ -51,10 +50,19 @@ async function sendPush(userId: string, title: string, body: string, screen: str
   } catch (e) { console.error('notify-strike-resolution push exception', e); }
 }
 
+// El secreto vigente vive en la tabla secretos_servidor, que solo lee
+// service_role. No se escribe aqui: este repositorio es publico.
+async function esSecretoValido(recibido: string): Promise<boolean> {
+  if (!recibido) return false;
+  const { data } = await createClient(SUPABASE_URL, SERVICE_ROLE)
+    .from('secretos_servidor').select('value').eq('key', 'noshow_secret').maybeSingle();
+  return !!data?.value && recibido === data.value;
+}
+
 serve(async (req) => {
   try {
     const secret = req.headers.get('x-noshow-secret') || '';
-    if (secret !== NOSHOW_SECRET) {
+    if (!(await esSecretoValido(secret))) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
     const body = await req.json().catch(() => ({}));

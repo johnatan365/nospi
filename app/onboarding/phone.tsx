@@ -78,13 +78,12 @@ export default function PhoneScreen() {
     try {
       const withoutPlus = full.replace('+', '');
       const digitsOnly = full.replace(/^\+\d{2,3}/, '');
-      const { data, error } = await supabase
-        .from('users')
-        .select('id')
-        .or('phone.eq.' + full + ',phone.eq.' + withoutPlus + ',phone.eq.' + digitsOnly)
-        .maybeSingle();
+      // Sin sesion todavia: la base responde solo si/no, sin exponer usuarios.
+      const { data, error } = await supabase.rpc('telefono_ya_registrado', {
+        p_telefonos: [full, withoutPlus, digitsOnly],
+      });
       if (error) { console.error(error); return false; }
-      return !!data;
+      return data === true;
     } catch { return false; }
   };
 

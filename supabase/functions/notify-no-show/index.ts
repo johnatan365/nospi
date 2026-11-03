@@ -40,12 +40,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
-const NOSHOW_SECRET = Deno.env.get('NOSHOW_SECRET') || 'nospi_noshow_wh_7f3a9c2e';
 
 const DEFAULT_SUPPORT_EMAIL = 'nospisocial@gmail.com';
 const DEFAULT_SUPPORT_WA = '573017714655';
 const POLICY_URL = 'https://nospi.co/#politica';
 const BOGOTA_TZ = 'America/Bogota';
+
+// El secreto vigente vive en la tabla secretos_servidor, que solo lee
+// service_role. No se escribe aqui: este repositorio es publico.
+async function esSecretoValido(supabase: any, recibido: string): Promise<boolean> {
+  if (!recibido) return false;
+  const { data } = await supabase.from('secretos_servidor').select('value').eq('key', 'noshow_secret').maybeSingle();
+  return !!data?.value && recibido === data.value;
+}
 
 function fmtDate(iso: string): string {
   try {
@@ -147,12 +154,17 @@ serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { /* cron sin body */ }
 
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
+
     // Requiere el secreto en TODOS los modos (incluye preview).
-    if (secret !== NOSHOW_SECRET) {
+    if (!(await esSecretoValido(supabase, secret))) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
+    // ping: solo confirma que el secreto es valido, sin tocar nada.
+    if (body?.ping) {
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     // config de soporte
     let supportEmail = DEFAULT_SUPPORT_EMAIL, supportWa = DEFAULT_SUPPORT_WA;

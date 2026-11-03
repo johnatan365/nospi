@@ -389,8 +389,10 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   const secretHeader = req.headers.get('x-cron-secret') || '';
+  // El secreto vive en secretos_servidor, que solo lee service_role. Antes
+  // estaba en app_config, que se lee con la llave publica.
   const { data: secretRow } = await supabase
-    .from('app_config')
+    .from('secretos_servidor')
     .select('value')
     .eq('key', 'cron_secret')
     .maybeSingle();
@@ -400,6 +402,12 @@ Deno.serve(async (req: Request) => {
   if (!cronSecret || !comparacionSegura(secretHeader, cronSecret)) {
     console.error('wompi-charge-subscriptions-cron: secreto invalido o sin configurar, peticion rechazada');
     return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
+  }
+
+  // ping: solo confirma que el secreto es valido, sin cobrar nada.
+  const cuerpo = await req.json().catch(() => ({}));
+  if (cuerpo?.ping) {
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
   }
 
   const now = new Date();
