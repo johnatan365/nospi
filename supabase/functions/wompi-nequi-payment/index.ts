@@ -4,6 +4,7 @@
 // poder identificar pagos declinados sin perder de vista si luego se aprobo.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validarMontoCupo, MENSAJE_MONTO_INVALIDO } from '../_shared/montoCupo.ts';
 
 // Las llaves de Wompi NO van escritas aqui: este repositorio es publico.
 // Se cargan en Supabase > Project Settings > Edge Functions > Secrets.
@@ -34,6 +35,20 @@ Deno.serve(async (req: Request) => {
     const { phoneNumber, acceptanceToken, personalDataToken, amountCOP, userEmail, userId, eventId } = await req.json();
     if (!phoneNumber || !acceptanceToken || !amountCOP || !userEmail)
       return new Response(JSON.stringify({ error: 'Faltan parámetros' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+    // El monto lo propone el celular, pero lo decide el servidor: si es menor
+    // que el precio del cupo (con el descuento de un codigo ya redimido), no
+    // se cobra. Ver _shared/montoCupo.ts.
+    const validacionMonto = await validarMontoCupo(
+      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), userId, eventId, amountCOP,
+    );
+    if (!validacionMonto.ok) {
+      console.warn('wompi-nequi-payment: monto rechazado', JSON.stringify({ error: validacionMonto.error, userId, eventId, amountCOP, minimo: validacionMonto.minimo }));
+      return new Response(JSON.stringify({ error: MENSAJE_MONTO_INVALIDO }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const reference = `nospi_nequi_${userId}_${eventId}_${Date.now()}`;
     const amountInCents = amountCOP * 100;

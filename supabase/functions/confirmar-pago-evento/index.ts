@@ -12,6 +12,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validarMontoCupo } from '../_shared/montoCupo.ts';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -65,6 +66,14 @@ serve(async (req) => {
     const ref = parseReference(tx.reference);
     if (!ref || ref.userId !== userId) return json({ ok: false, error: 'transaccion_ajena' }, 403);
 
+    // Lo pagado tiene que alcanzar para el cupo (ver _shared/montoCupo.ts).
+    const pagadoCOP = Math.round(Number(tx.amount_in_cents || 0) / 100);
+    const validacionMonto = await validarMontoCupo(supabase, userId, ref.eventId, pagadoCOP);
+    if (!validacionMonto.ok) {
+      console.warn('confirmar-pago-evento: monto rechazado', JSON.stringify({ tx: tx.id, userId, eventId: ref.eventId, pagadoCOP, minimo: validacionMonto.minimo }));
+      return json({ ok: false, error: 'monto_insuficiente' }, 409);
+    }
+
     const fila: Record<string, unknown> = {
       user_id: userId,
       event_id: ref.eventId,
@@ -72,7 +81,7 @@ serve(async (req) => {
       payment_status: 'completed',
       transaction_id: tx.id,
       payment_method: ref.method,
-      amount_paid_cop: tx.amount_in_cents ? Math.round(tx.amount_in_cents / 100) : null,
+      amount_paid_cop: pagadoCOP,
       confirmed_at: new Date().toISOString(),
     };
     // Lo que solo sabe la app. Si no viene, no se pisa lo que ya hubiera.
@@ -107,11 +116,13 @@ serve(async (req) => {
     if (error) {
       // P0001 = inscripcion cerrada para su genero (trigger). El pago quedo
       // aprobado: el webhook y la conciliacion del admin lo ven.
-      return json({ ok: false, error: 'no_se_pudo_confirmar', detalle: error.message }, 409);
+      console.error('confirmar-pago-evento: upsert', error.message);
+      return json({ ok: false, error: 'no_se_pudo_confirmar' }, 409);
     }
 
     return json({ ok: true, eventId: ref.eventId });
   } catch (e) {
-    return json({ ok: false, error: 'error_interno', detalle: String((e as Error)?.message || e) }, 500);
+    console.error('confirmar-pago-evento:', e);
+    return json({ ok: false, error: 'error_interno' }, 500);
   }
 });

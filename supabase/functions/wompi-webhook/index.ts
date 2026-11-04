@@ -47,6 +47,7 @@
 // (fuente confiable aunque el navegador del usuario no vuelva a la app).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validarMontoCupo } from '../_shared/montoCupo.ts';
 
 // Las llaves de Wompi NO van escritas aqui: este repositorio es publico.
 // Se cargan en Supabase > Project Settings > Edge Functions > Secrets.
@@ -667,6 +668,20 @@ Deno.serve(async (req: Request) => {
 
     if (status === 'APPROVED' && parsed) {
       const { userId, eventId, method } = parsed;
+      const pagadoCOP = Math.round(Number(tx.amount_in_cents || 0) / 100);
+
+      // Se confirma solo si lo pagado alcanza para el cupo. Antes se confirmaba
+      // cualquier transaccion aprobada, aunque fuera por el minimo de Wompi.
+      const validacionMonto = await validarMontoCupo(supabase, userId, eventId, pagadoCOP);
+      if (!validacionMonto.ok) {
+        await logResult(supabase, 'Pago aprobado pero el monto no alcanza para el cupo: NO se confirma la cita', {
+          tx: tx.id, userId, eventId, pagadoCOP, minimo: validacionMonto.minimo, error: validacionMonto.error,
+        });
+        return new Response(JSON.stringify({ received: true, status, matched: true, confirmed: false, reason: validacionMonto.error }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       const { data: existing } = await supabase
         .from('appointments')
@@ -687,6 +702,9 @@ Deno.serve(async (req: Request) => {
             payment_status: 'completed',
             transaction_id: tx.id,
             payment_method: method,
+            // Lo que de verdad se pago: cancelar_mi_cita reembolsa esto. Sin el
+            // dato, reembolsaba el precio completo.
+            amount_paid_cop: pagadoCOP,
             confirmed_at: new Date().toISOString(),
           },
           { onConflict: 'user_id,event_id', ignoreDuplicates: false },
@@ -698,12 +716,12 @@ Deno.serve(async (req: Request) => {
         await logResult(supabase, `Cita confirmada automaticamente via webhook para user ${userId} evento ${eventId}`, { tx: tx.id });
 
         if (!wasAlreadyCompleted) {
-          const { error: incError } = await supabase.rpc('increment_event_participants', { p_event_id: eventId });
-          if (incError) {
-            console.error('wompi-webhook: error incrementando current_participants:', incError.message);
-          }
+          // Sin increment_event_participants: el trigger
+          // trg_appointments_sync_current_participants ya recuenta desde
+          // appointments en el upsert de arriba. Sumar aqui dejaba el evento
+          // con una persona de mas.
 
-          const __amount = tx.amount_in_cents ? Math.round(tx.amount_in_cents / 100) : 15000;
+          const __amount = pagadoCOP;
 
           await sendMetaPurchase(supabase, {
             userId,
