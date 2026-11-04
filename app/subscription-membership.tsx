@@ -563,20 +563,16 @@ export default function SubscriptionMembershipScreen() {
     }
 
     setCancelling(true);
-    const { error } = await supabase
-      .from('subscriptions')
-      // cancelled_at se escribe AQUI, en el momento real. No sirve deducirla
-      // luego de updated_at: esa la pisa el cron de cobros cada 6 horas.
-      .update({
-        auto_renew: false,
-        cancellation_reason: reason,
-        cancelled_at: new Date().toISOString(),
-        cancelled_at_reconstruido: false,
-      })
-      .eq('id', subscription.id);
+    // cambiar_renovacion_suscripcion apaga la renovacion y guarda el motivo y
+    // cancelled_at con la hora real del servidor. Solo puede tocar eso: ni el
+    // estado, ni las fechas, ni el precio, ni la tarjeta.
+    const { data: resultado, error } = await supabase.rpc('cambiar_renovacion_suscripcion', {
+      p_activar: false,
+      p_motivo: reason,
+    });
     setCancelling(false);
 
-    if (error) {
+    if (error || resultado?.success !== true) {
       showAlert(t('comun.error'), t('sus.noCancelo'));
       return;
     }
@@ -612,20 +608,14 @@ export default function SubscriptionMembershipScreen() {
   const handleReactivate = async () => {
     if (!subscription) return;
     setReactivating(true);
-    const { error } = await supabase
-      .from('subscriptions')
-      // Al reactivar se limpia tambien la fecha: la cancelacion se deshizo, y
-      // dejarla puesta haria que el admin siguiera mostrandola como cancelada.
-      .update({
-        auto_renew: true,
-        cancellation_reason: null,
-        cancelled_at: null,
-        cancelled_at_reconstruido: false,
-      })
-      .eq('id', subscription.id);
+    // Al reactivar se limpian tambien el motivo y la fecha: la cancelacion se
+    // deshizo, y dejarlos haria que el admin la siguiera mostrando cancelada.
+    const { data: resultado, error } = await supabase.rpc('cambiar_renovacion_suscripcion', {
+      p_activar: true,
+    });
     setReactivating(false);
 
-    if (error) {
+    if (error || resultado?.success !== true) {
       showAlert(t('comun.error'), t('sus.noReactivo'));
       return;
     }

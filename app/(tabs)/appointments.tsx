@@ -291,54 +291,16 @@ export default function AppointmentsScreen() {
     console.log('User confirmed cancel appointment:', appointmentToCancel.id);
 
     try {
-      const isSubscriptionAppointment = appointmentToCancel.payment_method === 'subscription';
+      // El servidor decide el reembolso (mas de 24 h antes, nunca en citas por
+      // suscripcion, por lo que de verdad se pago) y lo suma al saldo en el
+      // mismo paso en que cancela. Antes lo calculaba el celular.
+      const { data, error: cancelError } = await supabase.rpc('cancelar_mi_cita', {
+        p_appointment_id: appointmentToCancel.id,
+      });
 
-      const eventStartTime = appointmentToCancel.event.start_time
-        ? new Date(appointmentToCancel.event.start_time)
-        : new Date(appointmentToCancel.event.date);
-
-      const now = new Date();
-      const timeDifferenceMs = appointmentToCancel.event.date ? eventStartTime.getTime() - now.getTime() : Number.POSITIVE_INFINITY;
-      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-      // Las citas por suscripcion nunca generan saldo virtual: no hubo un
-      // cobro individual de ese evento que reembolsar, solo se libera el cupo.
-      const isWithinRefundWindow = !isSubscriptionAppointment && timeDifferenceMs > twentyFourHoursMs;
-
-      const { error: appointmentError } = await supabase
-        .from('appointments')
-        .update({
-          status: 'cancelada',
-          payment_status: isSubscriptionAppointment ? appointmentToCancel.payment_status : (isWithinRefundWindow ? 'refunded' : 'completed'),
-        })
-        .eq('id', appointmentToCancel.id);
-
-      if (appointmentError) {
-        console.error('Error cancelling appointment:', appointmentError);
+      if (cancelError || data?.success !== true) {
+        console.error('Error cancelling appointment:', cancelError || data?.error);
         return;
-      }
-
-      if (isWithinRefundWindow) {
-        const refundAmount = appointmentToCancel.amount_paid_cop != null ? appointmentToCancel.amount_paid_cop : precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
-        const { error: balanceError } = await supabase.rpc('increment_virtual_balance', {
-          user_id_param: user?.id,
-          amount_param: refundAmount,
-        });
-
-        if (balanceError) {
-          console.error('Error updating virtual balance:', balanceError);
-          const { data: userData } = await supabase
-            .from('users')
-            .select('virtual_balance')
-            .eq('id', user?.id)
-            .single();
-
-          const currentBalance = userData?.virtual_balance || 0;
-          const newBalance = currentBalance + refundAmount;
-          await supabase
-            .from('users')
-            .update({ virtual_balance: newBalance })
-            .eq('id', user?.id);
-        }
       }
 
       setShowCancelModal(false);

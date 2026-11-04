@@ -428,64 +428,37 @@ export default function SubscriptionPlansScreen() {
         // Igual que arriba.
       }
 
-      const appointmentData: Record<string, any> = {
-        user_id: userId,
-        event_id: pendingEventId,
-        status: 'confirmada',
-        payment_status: 'completed',
-        transaction_id: transactionId,
-        payment_method: paymentMethod, amount_paid_cop: amountPaidCOP ?? 0,
-        confirmed_at: new Date().toISOString(),
-      };
-      if (waiverPending === 'true') {
-        appointmentData.waiver_accepted_at = new Date().toISOString();
-      }
-      if (idiomasMesa) {
-        appointmentData.idiomas_mesa = idiomasMesa;
-      }
-      if (zonasPreferidas) {
-        appointmentData.zonas_preferidas = zonasPreferidas;
-        if (zonaOtra) appointmentData.zona_otra = zonaOtra;
-      }
-
-      // Verificar si ya existe una cita para este usuario y evento
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .maybeSingle();
-
-      let writeError = null;
-
-      if (existing) {
-        // Ya existe — actualizar
-        const { error } = await supabase
-          .from('appointments')
-          .update(appointmentData)
-          .eq('user_id', userId)
-          .eq('event_id', pendingEventId);
-        writeError = error;
+      // La cita la confirma el servidor, nunca el celular directo en la tabla:
+      // - Pagos por Wompi: confirmar-pago-evento le pregunta a Wompi por la
+      //   transaccion y solo confirma si esta aprobada y es de esta persona.
+      // - Saldo, suscripcion, evento sin costo y codigo del 100%:
+      //   reservar_evento revisa el saldo, la suscripcion o el precio real, y
+      //   descuenta el saldo en el mismo paso en que crea la cita.
+      const esPasarela = ['bancolombia', 'pse', 'card', 'nequi'].includes(paymentMethod);
+      let confirmada = false;
+      if (esPasarela) {
+        const { data, error } = await supabase.functions.invoke('confirmar-pago-evento', {
+          body: {
+            transactionId,
+            waiver: waiverPending === 'true',
+            idiomas: idiomasMesa,
+            zonas: zonasPreferidas,
+            zonaOtra,
+          },
+        });
+        confirmada = !error && data?.ok === true;
       } else {
-        // No existe — insertar
-        const { error } = await supabase
-          .from('appointments')
-          .insert(appointmentData);
-        writeError = error;
+        const { data, error } = await supabase.rpc('reservar_evento', {
+          p_event_id: pendingEventId,
+          p_metodo: paymentMethod,
+          p_idiomas: idiomasMesa,
+          p_zonas: zonasPreferidas,
+          p_zona_otra: zonaOtra,
+          p_waiver: waiverPending === 'true',
+        });
+        confirmada = !error && data?.success === true;
       }
-
-      if (writeError) return false;
-
-      // Verificar que quedó confirmada
-      const { data: verification } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .eq('status', 'confirmada')
-        .maybeSingle();
-
-      if (!verification) return false;
+      if (!confirmada) return false;
 
       await AsyncStorage.removeItem('pending_event_confirmation');
       await AsyncStorage.removeItem('pending_waiver_accepted');
@@ -915,10 +888,15 @@ export default function SubscriptionPlansScreen() {
 
     setProcessingMethod('virtual');
     try {
-      await supabase.from('users').update({ virtual_balance: virtualBalance - effectivePriceCOP }).eq('id', user?.id);
-
+      // El saldo lo descuenta reservar_evento en el mismo paso en que crea la
+      // cita: si la cita no se puede crear, no se descuenta nada.
       const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      await confirmAppointment('', 'virtual_balance', undefined, effectivePriceCOP);
+      const ok = await confirmAppointment('', 'virtual_balance', undefined, effectivePriceCOP);
+      if (!ok) {
+        showAlert(t('comun.error'), t('pago.noSaldoVirtual'));
+        await fetchVirtualBalance();
+        return;
+      }
       if (pendingEventId) {
 
         router.replace({

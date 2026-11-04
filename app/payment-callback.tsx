@@ -139,71 +139,23 @@ async function confirmAppointmentInSupabase(
     // Igual que arriba.
   }
 
-  // Intentar upsert con todos los campos extendidos
-  const { error: upsertError } = await supabase
-    .from('appointments')
-    .upsert(
-      {
-        user_id: userId,
-        event_id: eventId,
-        status: 'confirmada',
-        payment_status: 'completed',
-        transaction_id: transactionId,
-        payment_method: paymentMethod,
-        confirmed_at: new Date().toISOString(),
-        ...waiverFields,
-        ...idiomasFields,
-        ...zonasFields,
-      },
-      { onConflict: 'user_id,event_id', ignoreDuplicates: false },
-    );
-
-  if (upsertError) {
-    // Puede fallar si las columnas transaction_id/payment_method no existen en el schema.
-    // Fallback: solo los campos base.
-    
-
-    const { error: upsertBaseError } = await supabase
-      .from('appointments')
-      .upsert(
-        {
-          user_id: userId,
-          event_id: eventId,
-          status: 'confirmada',
-          payment_status: 'completed',
-        },
-        { onConflict: 'user_id,event_id', ignoreDuplicates: false },
-      );
-
-    if (upsertBaseError) {
-      
-      // Último recurso: update + insert por separado
-      const { data: updated, error: updateError } = await supabase
-        .from('appointments')
-        .update({ status: 'confirmada', payment_status: 'completed' })
-        .eq('user_id', userId)
-        .eq('event_id', eventId)
-        .select('id');
-
-      if (updateError) 
-
-      if (!updated || updated.length === 0) {
-        const { error: insertError } = await supabase.from('appointments').insert({
-          user_id: userId,
-          event_id: eventId,
-          status: 'confirmada',
-          payment_status: 'completed',
-        });
-        if (insertError) {
-          
-          return false;
-        }
-      }
-    } else {
-      
-    }
-  } else {
-    
+  // La cita la confirma el servidor: confirmar-pago-evento le pregunta a Wompi
+  // por la transaccion y solo la confirma si esta aprobada y su referencia es
+  // de esta persona y este evento. Antes el celular escribia directo en
+  // appointments, y para eso cualquiera con sesion podia marcarse una cita
+  // como pagada. wompi-webhook tambien la confirma por su lado.
+  const { error: confirmError } = await supabase.functions.invoke('confirmar-pago-evento', {
+    body: {
+      transactionId,
+      waiver: !!waiverFields.waiver_accepted_at,
+      idiomas: idiomasFields.idiomas_mesa ?? null,
+      zonas: zonasFields.zonas_preferidas ?? null,
+      zonaOtra: zonasFields.zona_otra ?? null,
+    },
+  });
+  if (confirmError) {
+    // No se corta aqui: si el webhook ya la confirmo, la verificacion de abajo
+    // la encuentra igual.
   }
 
   // Verificar que la fila existe y tiene status='confirmada' antes de continuar
