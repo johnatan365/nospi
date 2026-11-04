@@ -1523,75 +1523,6 @@ export default function SubscriptionPlansScreen() {
     }, 5000);
   }, [confirmAppointment, router]);
 
-    // ========== TEST PAYMENT HANDLER - DELETE BEFORE PRODUCTION ==========
-  const handleTestPayment = async () => {
-
-    try {
-      const pendingEventId = await AsyncStorage.getItem('pending_event_confirmation');
-      if (!pendingEventId) {
-        showAlert('Test', 'No hay evento pendiente. Ve a un evento y presiona Confirmar primero.');
-        return;
-      }
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) {
-        showAlert('Test', 'No hay sesión activa.');
-        return;
-      }
-
-      // Check if appointment already exists
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('event_id', pendingEventId)
-        .maybeSingle();
-
-      if (existing) {
-
-        const { error: updateError } = await supabase
-          .from('appointments')
-          .update({
-            status: 'confirmada',
-            payment_status: 'completed',
-          })
-          .eq('id', existing.id);
-        if (updateError) {
-
-          showAlert('Test Error', updateError.message);
-          return;
-        }
-      } else {
-
-        const { error: insertError } = await supabase
-          .from('appointments')
-          .insert({
-            user_id: userId,
-            event_id: pendingEventId,
-            status: 'confirmada',
-            payment_status: 'completed',
-          });
-        if (insertError) {
-
-          showAlert('Test Error', insertError.message);
-          return;
-        }
-      }
-
-      await AsyncStorage.removeItem('pending_event_confirmation');
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      router.replace({
-        pathname: '/event-details/[id]',
-        params: { id: pendingEventId, paymentSuccess: 'true' },
-      });
-    } catch (e: any) {
-
-      showAlert('Test Error', e.message);
-    }
-  };
-  // ========== END TEST PAYMENT HANDLER ==========
 
 	const handlePSEPayment = async () => {
     const cleanPhone = psePhone.replace(/\D/g, '');
@@ -2256,17 +2187,6 @@ export default function SubscriptionPlansScreen() {
           </View>
         </TouchableOpacity>
 
-              {/* ========== TEST BUTTON - controlado desde admin web ========== */}
-        {appConfig.test_payment_enabled === 'true' && (
-          <TouchableOpacity
-            style={testPaymentStyles.btn}
-            onPress={handleTestPayment}
-            activeOpacity={0.7}
-          >
-            <Text style={testPaymentStyles.btnText}>🧪 Pago de Prueba (TEST)</Text>
-          </TouchableOpacity>
-        )}
-        {/* ========== END TEST BUTTON ========== */}
 
 				<Text style={styles.secureFooter}>{t('pago.segurosWompi')}</Text>
 				<Text style={styles.cancelPolicyFooter}>{t('pag.politicaLarga')}</Text>
@@ -2428,24 +2348,3 @@ const styles = StyleSheet.create({
   bankOptionText: { fontSize: 15, color: '#333' },
   successButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 });
-
-// ========== TEST BUTTON STYLES - DELETE BEFORE PRODUCTION ==========
-const testPaymentStyles = StyleSheet.create({
-  btn: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#ff0',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginHorizontal: 16,
-  },
-  btnText: {
-    color: '#ff0',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-});
-// ========== END TEST BUTTON STYLES ==========
