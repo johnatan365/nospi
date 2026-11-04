@@ -988,7 +988,6 @@ export default function AdminPanelScreen() {
   const [configSubscriptionPrice, setConfigSubscriptionPrice] = useState('');
   const [configSupportEmail, setConfigSupportEmail] = useState('');
   const [configSupportWhatsapp, setConfigSupportWhatsapp] = useState('');
-  const [configTestPaymentEnabled, setConfigTestPaymentEnabled] = useState(false);
   // Interruptores de la traduccion automatica al ingles, por tipo de
   // contenido. La comunidad va aparte de los canales porque es la que se come
   // el saldo: ~62.000 caracteres al mes contra ~10.000 de los avisos.
@@ -2453,7 +2452,6 @@ export default function AdminPanelScreen() {
       if (row.key === 'subscription_price') setConfigSubscriptionPrice(row.value);
       if (row.key === 'support_email') setConfigSupportEmail(row.value);
       if (row.key === 'support_whatsapp') setConfigSupportWhatsapp(row.value);
-      if (row.key === 'test_payment_enabled') setConfigTestPaymentEnabled(row.value === 'true');
       if (row.key === 'subscription_price_3m') setConfigSubPrice3m(row.value);
       if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
       if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
@@ -2655,7 +2653,6 @@ export default function AdminPanelScreen() {
         { key: 'subscription_price', value: configSubscriptionPrice.trim() },
         { key: 'support_email', value: configSupportEmail.trim() },
         { key: 'support_whatsapp', value: configSupportWhatsapp.trim() },
-        { key: 'test_payment_enabled', value: configTestPaymentEnabled ? 'true' : 'false' },
         { key: 'subscription_price_3m', value: configSubPrice3m },
         { key: 'subscription_price_6m', value: configSubPrice6m },
         { key: 'prueba_solo_suscripcion', value: configPuerta2 ? 'true' : 'false' },
@@ -8587,48 +8584,12 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
 
         <Categoria
           titulo="🧪 Pruebas y accesos"
-          descripcion="Interruptores para probar la app sin cobrar de verdad."
-          resumen={`pago de prueba ${configTestPaymentEnabled ? 'activado' : 'apagado'} · solo suscripción ${configPuerta2 ? 'activado' : 'apagado'}`}
+          descripcion="Interruptores para probar cambios con un grupo de personas."
+          resumen={`solo suscripción ${configPuerta2 ? 'activado' : 'apagado'}`}
           abierta={!!seccionesAbiertas.pruebas}
           onToggle={() => alternarSeccion("pruebas")}
         >
           <RejillaDeAjustes>
-            <Ajuste titulo="🧪 Botón Pago de Prueba" color={configTestPaymentEnabled ? '#92400E' : '#6B7280'} borde={`4px solid ${configTestPaymentEnabled ? '#F59E0B' : '#9CA3AF'}`}>
-              <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
-                Muestra u oculta el botón "Pago de Prueba (TEST)" en la pantalla de pago de la app
-              </div>
-              <div
-                onClick={() => setConfigTestPaymentEnabled(!configTestPaymentEnabled)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
-                  backgroundColor: configTestPaymentEnabled ? '#FEF3C7' : '#F3F4F6',
-                  borderRadius: 12, padding: '14px 18px',
-                  border: `2px solid ${configTestPaymentEnabled ? '#F59E0B' : '#E5E7EB'}`,
-                  transition: 'all 0.2s', userSelect: 'none',
-                }}
-              >
-                {/* Toggle pill */}
-                <div style={{
-                  width: 52, height: 28, borderRadius: 14, position: 'relative', flexShrink: 0,
-                  backgroundColor: configTestPaymentEnabled ? '#F59E0B' : '#D1D5DB',
-                  transition: 'background 0.2s',
-                }}>
-                  <div style={{
-                    position: 'absolute', top: 3, left: configTestPaymentEnabled ? 27 : 3,
-                    width: 22, height: 22, borderRadius: '50%', backgroundColor: 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s',
-                  }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: configTestPaymentEnabled ? '#92400E' : '#6B7280' }}>
-                    {configTestPaymentEnabled ? '✅ Activado — visible en la app' : '⛔ Desactivado — oculto en la app'}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
-                    {configTestPaymentEnabled ? 'El botón 🧪 aparece en la pantalla de pago' : 'Los usuarios no ven el botón de prueba'}
-                  </div>
-                </div>
-              </div>
-            </Ajuste>
             <Ajuste titulo="🚪 Prueba: solo suscripción" color={configPuerta2 ? '#5B21B6' : '#6B7280'} borde={`4px solid ${configPuerta2 ? '#7C3AED' : '#9CA3AF'}`}>
               <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
                 A quien llegue por el link de la campaña de prueba se le oculta el pago por evento y solo ve los planes. A todos los demás no les cambia nada.
