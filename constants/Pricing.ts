@@ -25,11 +25,20 @@ export function precioDesdeConfig(valor: string | undefined | null, respaldo: nu
 // edita en Supabase sin tocar codigo; esto solo cubre el instante de carga.
 export const FALLBACK_USD_COP_RATE = 3239;
 
+// Precio del cupo en dolares para quien ve la app en ingles: el mismo numero
+// que en pesos, en miles. $15.000 -> USD 15; un evento de $20.000 -> USD 20.
+// Decision del dueno (4 de noviembre de 2026). Antes salia de
+// app_config.event_price_usd, una cifra fija que no seguia el precio de cada
+// evento. La funcion reservar_evento de la base hace la misma cuenta.
+export function usdDelEvento(cop: number): number {
+  return Math.round(cop / 1000);
+}
+
 // Cuanto se le COBRA a Wompi, segun el idioma de la app.
 //
 // Wompi liquida siempre en pesos: no existe un cobro "en dolares". Para quien
 // ve la app en ingles se cobra el equivalente en pesos del precio en dolares
-// (event_price_usd x usd_cop_rate), y el banco del visitante le factura
+// (usdDelEvento x usd_cop_rate), y el banco del visitante le factura
 // aproximadamente esa cifra en su moneda, a su propia tasa.
 //
 // Esto ANTES no existia: la app mostraba "USD 19" y le mandaba a Wompi los
@@ -51,8 +60,8 @@ export function montoACobrarCOP(
 }
 
 // Como se MUESTRA un precio segun el idioma de la app. El numero en dolares es
-// el de app_config (event_price_usd, subscription_price_usd, etc.), no una
-// division de los pesos.
+// el de usdDelEvento para el cupo y el de app_config para la suscripcion
+// (subscription_price_usd, etc.).
 //
 // Va atado al IDIOMA DE LA APP a proposito, no a la mesa ni al pais: si
 // dependiera de la mesa, un colombiano que quiere practicar ingles tendria que

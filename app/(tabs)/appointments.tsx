@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Linking, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
-import { FALLBACK_EVENT_PRICE_COP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
+import { FALLBACK_EVENT_PRICE_COP, precioDesdeConfig, textoPrecio, usdDelEvento } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { supabase } from '@/lib/supabase';
@@ -679,7 +679,7 @@ export default function AppointmentsScreen() {
 
                 const eventPriceNum = precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
                 const refundMessage = isWithinRefundWindow
-                  ? t('citas.reembolsoSi', { monto: textoPrecio(idioma, eventPriceNum, precioDesdeConfig(appConfig.event_price_usd, 19)) })
+                  ? t('citas.reembolsoSi', { monto: textoPrecio(idioma, eventPriceNum, usdDelEvento(eventPriceNum)) })
                   : t('citas.reembolsoNo');
 
                 return (

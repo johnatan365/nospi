@@ -10,7 +10,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
-import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, FALLBACK_USD_COP_RATE, montoACobrarCOP, precioDesdeConfig, textoPrecio } from '@/constants/Pricing';
+import { FALLBACK_EVENT_PRICE_COP, FALLBACK_SUBSCRIPTION_PRICE_COP, FALLBACK_USD_COP_RATE, montoACobrarCOP, precioDesdeConfig, textoPrecio, usdDelEvento } from '@/constants/Pricing';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -321,27 +321,23 @@ export default function SubscriptionPlansScreen() {
     ? eventPrice
     : precioDesdeConfig(appConfig.event_price, FALLBACK_EVENT_PRICE_COP);
   // Lo que de verdad se le cobra a Wompi. Si la app esta en ingles, es el
-  // equivalente en pesos de event_price_usd (ver montoACobrarCOP en
+  // equivalente en pesos de su precio en dolares (ver montoACobrarCOP en
   // constants/Pricing.ts). Todo lo que cuelga de priceCOP -- el monto que va a
   // Wompi, el amount_paid_cop que decide el reembolso, el valor del evento
   // Purchase del pixel y el descuento del saldo virtual -- queda con la misma
   // cifra, que es justo lo que antes no pasaba.
   const usdCopRate = precioDesdeConfig(appConfig.usd_cop_rate, FALLBACK_USD_COP_RATE);
-  const priceCOP = montoACobrarCOP(
-    idioma,
-    priceBaseCOP,
-    precioDesdeConfig(appConfig.event_price_usd, 10),
-    usdCopRate,
-  );
+  // priceUSD es el numero que se MUESTRA en ingles: el precio en pesos, en
+  // miles ($15.000 -> USD 15). priceCOP es su equivalente en pesos, que es lo
+  // que se cobra.
+  const priceUSD = usdDelEvento(priceBaseCOP);
+  const priceCOP = montoACobrarCOP(idioma, priceBaseCOP, priceUSD, usdCopRate);
   const subscriptionPriceCOP = precioDesdeConfig(appConfig.subscription_price, FALLBACK_SUBSCRIPTION_PRICE_COP);
   // El plan de 6 meses es el que deja el menor costo mensual; se anuncia como
   // gancho aunque el detalle de los 3 planes viva en subscription-membership.
   const precioMensualMasBajo = Math.round(precioDesdeConfig(appConfig.subscription_price_6m, 125900) / 6);
   // Precio final a cobrar, ya con el descuento del código promocional aplicado (si hay uno).
   // Sin código aplicado, es igual a priceCOP — no cambia ningún comportamiento existente.
-  // priceUSD es el numero que se MUESTRA en ingles; priceCOP de arriba ya es su
-  // equivalente en pesos, que es lo que se cobra.
-  const priceUSD = precioDesdeConfig(appConfig.event_price_usd, 10);
   const subscriptionPriceUSD = precioDesdeConfig(appConfig.subscription_price_usd, 29);
   const precioMensualMasBajoUSD = Math.round(precioDesdeConfig(appConfig.subscription_price_6m_usd, 109) / 6);
 
@@ -455,6 +451,7 @@ export default function SubscriptionPlansScreen() {
           p_zonas: zonasPreferidas,
           p_zona_otra: zonaOtra,
           p_waiver: waiverPending === 'true',
+          p_idioma: idioma,
         });
         confirmada = !error && data?.success === true;
       }
@@ -490,7 +487,7 @@ export default function SubscriptionPlansScreen() {
     } catch {
       return false;
     }
-  }, [user?.id]);
+  }, [user?.id, idioma]);
 
   // Valida y redime un código promocional. Si el descuento es del 100%, confirma
   // el cupo directo sin pasar por Wompi (mismo patrón que la suscripción activa).
