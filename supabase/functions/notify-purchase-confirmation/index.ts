@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { secretoValido } from '../_shared/secretoServidor.ts';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -12,7 +13,8 @@ const ADMIN_EMAIL = 'nospisocial@gmail.com';
 const TEMPLATE_NAME = 'confirmacion_compra';
 const TEMPLATE_LANG = 'es_CO';
 
-const WEBHOOK_SECRET = 'nospi_purchase_wh_9d2f7a4c1e8b3f6a';
+// El secreto vive en public.secretos_servidor (clave 'purchase_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 // Links cortos de instalar (detectan el celular y mandan a la tienda correcta).
 // En un evento virtual el enlace del Meet no viaja por correo: se abre desde
@@ -359,7 +361,7 @@ async function sendAdminRecurrentEmail(params: {
 serve(async (req) => {
   try {
     const secret = req.headers.get('x-webhook-secret');
-    if (secret !== WEBHOOK_SECRET) {
+    if (!(await secretoValido('purchase_wh', secret))) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
 

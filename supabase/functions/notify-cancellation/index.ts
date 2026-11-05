@@ -1,3 +1,4 @@
+import { secretoValido } from '../_shared/secretoServidor.ts';
 // Supabase Edge Function: notify-cancellation
 // Llamada por un trigger de la base de datos (pg_net) cada vez que una cita
 // pasa a status='cancelada'. Envia correo interno a soporte y correo de
@@ -5,7 +6,8 @@
 // verify_jwt=false: quien llama es un trigger de Postgres (pg_net); se valida
 // con el header x-webhook-secret.
 
-const WEBHOOK_SECRET = 'nospi_cancel_wh_7f3d9a1c2b4e6f80';
+// El secreto vive en public.secretos_servidor (clave 'cancel_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,7 +94,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const secretHeader = req.headers.get('x-webhook-secret');
-  if (secretHeader !== WEBHOOK_SECRET) {
+  if (!(await secretoValido('cancel_wh', secretHeader))) {
     return new Response(JSON.stringify({ error: 'No autorizado' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

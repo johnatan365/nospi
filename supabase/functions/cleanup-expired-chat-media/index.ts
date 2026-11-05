@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { secretoValido } from '../_shared/secretoServidor.ts';
 
 // Borra las fotos y videos del chat que ya cumplieron su tiempo de vida
 // (30 dias por defecto). La invoca un cron una vez al dia.
@@ -19,7 +20,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // La llama el cron de Postgres, que solo tiene a mano la llave publica; por eso
 // se autentica con un secreto propio, igual que notify-chat-message.
-const WEBHOOK_SECRET = "nospi_cleanup_wh_d3d948c830fbe7f6";
+// El secreto vive en public.secretos_servidor (clave 'cleanup_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 const DEFAULT_DAYS = 30;
 const BUCKET = "chat-media";
@@ -49,7 +51,7 @@ Deno.serve(async (req: Request) => {
     const secret = req.headers.get("x-webhook-secret") ?? "";
 
     // Vale el secreto del cron o la service role key (para pruebas manuales).
-    const autorizado = secret === WEBHOOK_SECRET || (!!serviceRoleKey && jwt === serviceRoleKey);
+    const autorizado = (await secretoValido('cleanup_wh', secret)) || (!!serviceRoleKey && jwt === serviceRoleKey);
     if (!autorizado) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),

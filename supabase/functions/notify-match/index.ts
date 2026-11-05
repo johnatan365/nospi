@@ -12,15 +12,17 @@
 // asi el push abre directo el chat SIN necesidad de una version nueva de la app.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { secretoValido } from '../_shared/secretoServidor.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const MATCH_SECRET = Deno.env.get('MATCH_SECRET') || 'nospi_match_wh_9d2f7a1c3e6b';
+// El secreto vive en public.secretos_servidor (clave 'match_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 serve(async (req) => {
   try {
     const secret = req.headers.get('x-match-secret') || '';
-    if (secret !== MATCH_SECRET) {
+    if (!(await secretoValido('match_wh', secret))) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
     let body: any = {};

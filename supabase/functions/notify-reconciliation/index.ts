@@ -6,13 +6,15 @@
 // reconciliation_notifications para no repetir el mismo aviso cada hora).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { secretoValido } from '../_shared/secretoServidor.ts';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 // Secreto compartido para autorizar la invocacion desde el cron (pg_cron manda
 // este valor en el header x-recon-secret). Valor fijo, NO generado en runtime.
-const RECON_SECRET = 'nospi_recon_wh_a7k2m9x4b1qz';
+// El secreto vive en public.secretos_servidor (clave 'recon_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,7 +31,7 @@ Deno.serve(async (req: Request) => {
   const authHeader = req.headers.get('authorization') || '';
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const authorized =
-    reconSecret === RECON_SECRET ||
+    (await secretoValido('recon_wh', reconSecret)) ||
     (SUPABASE_SERVICE_ROLE_KEY.length > 0 && bearer === SUPABASE_SERVICE_ROLE_KEY);
   if (!authorized) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {

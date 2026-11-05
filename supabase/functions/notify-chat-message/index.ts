@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { secretoValido } from '../_shared/secretoServidor.ts';
 
 // Notifica por push a los participantes de una conversacion de chat cuando
 // llega un mensaje nuevo (menos a quien lo escribio). Invocada solo por el
@@ -20,7 +21,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // MENCIONES: a quien fue mencionado se le manda un aviso distinto ("te
 // mencionó"), para que destaque entre los mensajes normales del grupo.
 
-const WEBHOOK_SECRET = "nospi_chat_wh_7f3a1c9d2e6b48f0";
+// El secreto vive en public.secretos_servidor (clave 'chat_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -48,7 +50,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const secret = req.headers.get("x-webhook-secret") ?? "";
-    if (secret !== WEBHOOK_SECRET) {
+    if (!(await secretoValido('chat_wh', secret))) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },

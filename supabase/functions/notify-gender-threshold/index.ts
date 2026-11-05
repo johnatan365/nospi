@@ -7,10 +7,12 @@
 // El dedupe se hace en la base, en gender_threshold_notifications.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { secretoValido } from '../_shared/secretoServidor.ts';
 
 const SUPABASE_URL = 'https://wjdiraurfbawotlcndmk.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const WEBHOOK_SECRET = 'nospi_gender_wh_7f3ac9e2b0d84c1a';
+// El secreto vive en public.secretos_servidor (clave 'gender_wh'), no aqui: el
+// repositorio es publico. Ver _shared/secretoServidor.ts.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,7 +24,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const secret = req.headers.get('x-webhook-secret');
-  if (secret !== WEBHOOK_SECRET) {
+  if (!(await secretoValido('gender_wh', secret))) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
