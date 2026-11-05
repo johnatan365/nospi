@@ -49,3 +49,12 @@ preview/reports/
 # Carpetas de trabajo de Claude (no son parte de la app)
 _to_delete/
 Claude outputs/
+
+# Bases y exportes locales: pueden traer datos de usuarios (repo PUBLICO,
+# ver CLAUDE.md > Datos personales)
+*.sqlite
+*.sqlite3
+*.db
+*.csv
+*.xlsx
+*.xls

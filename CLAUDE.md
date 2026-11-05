@@ -60,6 +60,21 @@ Para que el hook quede activo en una copia nueva del repositorio:
 git config core.hooksPath .githooks
 ```
 
+## Datos personales: nunca al repo
+
+Ningun informe, exporte, listado o base local con datos de usuarios (nombres
+con telefono, correos, conversaciones) se comitea. Hasta noviembre de 2026
+estuvieron publicados tres informes de `Claude outputs/` (telefonos y correos
+de usuarios) y `agent_chat_context.sqlite`; se sacaron del arbol pero siguen en
+el historial.
+
+- Los informes y hojas de envio van en `Claude outputs/` (esta en
+  `.gitignore`) o fuera del repositorio.
+- `.gitignore` excluye `*.sqlite`, `*.db`, `*.csv`, `*.xlsx`.
+- El hook `.githooks/pre-commit` y el chequeo de CI bloquean esos archivos y
+  cualquier cambio que agregue 3 o mas celulares o correos personales
+  distintos. Si te frena, saca los datos; no uses `--no-verify`.
+
 ## Otras reglas que ya costaron caro
 
 - **Antes de escribir SQL a mano, busca si la app ya tiene una funcion para

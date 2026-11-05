@@ -51,6 +51,50 @@ if [ -n "$prohibidos" ]; then
   reportar "Archivo con credenciales" "$prohibidos"
 fi
 
+# --- Datos personales de usuarios -------------------------------------------
+# Informes, exportes y bases locales con telefonos o correos de usuarios no
+# entran al repo (es publico). Ya paso: 'Claude outputs/' y
+# agent_chat_context.sqlite estuvieron publicados hasta noviembre de 2026.
+pii=0
+reportar_pii() {
+  if [ "$pii" -eq 0 ]; then
+    echo ""
+    echo "  COMMIT BLOQUEADO: trae datos personales de usuarios."
+    echo "  Este repositorio es publico. Ver CLAUDE.md > Datos personales."
+    echo ""
+  fi
+  pii=1
+  echo "  -> $1"
+  echo "$2" | sed 's/^/     /'
+  echo ""
+}
+
+archivos_pii=$(git diff --cached --name-only --diff-filter=AR \
+               | grep -E '^Claude outputs/|^_to_delete/|\.(sqlite|sqlite3|db|csv|xlsx|xls)$')
+[ -n "$archivos_pii" ] && reportar_pii "Informe, exporte o base local" "$archivos_pii"
+
+agregado_pii=$(git diff --cached --no-color -U0 -- . ':(exclude).githooks/pre-commit' \
+                 ':(exclude).github/workflows/no-secretos.yml' \
+               | grep '^+' | grep -v '^+++')
+# Celulares colombianos distintos (3xx xxx xxxx). Uno suelto puede ser el de
+# soporte; tres o mas ya es una lista de personas.
+n_tel=$(printf '%s\n' "$agregado_pii" | grep -oE '(^|[^0-9])(\+?57)?3[0-9]{9}([^0-9]|$)' \
+        | grep -oE '3[0-9]{9}' | sort -u | wc -l | tr -d ' ')
+[ "$n_tel" -ge 3 ] && reportar_pii "$n_tel numeros de celular distintos" "(no se muestran)"
+# Correos personales distintos, sin contar el de Nospi.
+n_mail=$(printf '%s\n' "$agregado_pii" \
+         | grep -oiE '[A-Za-z0-9._%+-]+@(gmail|hotmail|outlook|yahoo|icloud|live)\.[a-z.]{2,}' \
+         | tr 'A-Z' 'a-z' | grep -v '^nospisocial@' | sort -u | wc -l | tr -d ' ')
+[ "$n_mail" -ge 3 ] && reportar_pii "$n_mail correos personales distintos" "(no se muestran)"
+
+if [ "$pii" -eq 1 ]; then
+  echo "  Los informes con datos de personas se guardan fuera del repo"
+  echo "  (por ejemplo en 'Claude outputs/', que esta en .gitignore)."
+  echo "  NO uses --no-verify para saltarte esto."
+  echo ""
+  exit 1
+fi
+
 if [ "$fallo" -eq 1 ]; then
   echo "  Saca el secreto del archivo y leelo de una variable de entorno:"
   echo "    const X = Deno.env.get('X') || '';   // sin valor por defecto"
