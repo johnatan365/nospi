@@ -62,6 +62,44 @@ async function generateSignature(reference: string, amountInCents: number, curre
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Avisa al admin cuando un cobro se aprueba pero la suscripcion no se puede
+// guardar. Sin esto el fallo solo queda en los logs y el primero en enterarse
+// es la persona que pago, escribiendo por WhatsApp.
+const ADMIN_EMAIL = 'nospisocial@gmail.com';
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+
+async function avisarAdminCobroSinSuscripcion(
+  contexto: string,
+  datos: { userId: string; userEmail: string; transactionId: string; price: number; motivo: string },
+): Promise<void> {
+  if (!RESEND_API_KEY) return;
+  const texto = [
+    `Se cobro una suscripcion en Wompi pero NO se pudo guardar en la base de datos.`,
+    ``,
+    `Funcion: ${contexto}`,
+    `Usuario: ${datos.userEmail} (${datos.userId})`,
+    `Transaccion Wompi: ${datos.transactionId}`,
+    `Valor: $${Number(datos.price).toLocaleString('es-CO')} COP`,
+    `Motivo: ${datos.motivo}`,
+    ``,
+    `La persona YA pago. Hay que crearle la suscripcion a mano o devolverle la plata.`,
+  ].join('\n');
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Nospi <noreply@nospi.co>',
+        to: [ADMIN_EMAIL],
+        subject: 'URGENTE: cobro de suscripcion sin suscripcion creada',
+        text: texto,
+      }),
+    });
+  } catch (e) {
+    console.error(`${contexto}: no se pudo avisar al admin:`, e);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -83,6 +121,24 @@ Deno.serve(async (req: Request) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // El perfil (tabla users) tiene que existir ANTES de cobrar: subscriptions
+    // tiene una llave foranea contra users, asi que si la persona se registra
+    // con Google y se va derecho a pagar sin completar el perfil, el cobro pasa
+    // en Wompi pero la suscripcion no se puede guardar nunca. Preferimos no
+    // cobrar a cobrar y quedar debiendo.
+    const { data: perfil } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!perfil) {
+      console.warn('wompi-create-subscription: intento de pago sin perfil creado', userId);
+      return new Response(
+        JSON.stringify({ error: 'Completa tu perfil antes de suscribirte.', code: 'PERFIL_INCOMPLETO' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     const plan = resolverPlan(planType);
@@ -229,6 +285,9 @@ Deno.serve(async (req: Request) => {
 
     if (upsertError) {
       console.error('wompi-create-subscription: error guardando suscripción', upsertError.message);
+      await avisarAdminCobroSinSuscripcion('wompi-create-subscription', {
+        userId, userEmail, transactionId: txData.data.id, price, motivo: upsertError.message,
+      });
       return new Response(JSON.stringify({ error: 'Pago aprobado pero no se pudo guardar la suscripción' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

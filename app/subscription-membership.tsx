@@ -180,6 +180,33 @@ export default function SubscriptionMembershipScreen() {
     router.push('/login');
     return null;
   };
+
+  // Quien entra con Google o Apple queda con cuenta creada pero SIN fila en la
+  // tabla users hasta que termina el registro. La tabla subscriptions tiene una
+  // llave foránea contra users, así que si paga antes de eso el cobro pasa en
+  // Wompi y la suscripción no se puede guardar nunca: queda pagando sin tener
+  // nada. Preferimos mandarlo a completar el perfil antes que cobrarle.
+  // La edge function wompi-create-subscription valida lo mismo del lado del
+  // servidor; esta validación es para no dejarlo llegar ni al formulario.
+  const exigirPerfilCompleto = async (userId: string): Promise<boolean> => {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+      if (data) return true;
+    } catch {
+      // Si la consulta falla no bloqueamos: el servidor vuelve a validar.
+      return true;
+    }
+    showAlert(
+      'Falta completar tu perfil',
+      'Antes de suscribirte necesitamos tus datos. Completa tu perfil y vuelve a intentarlo. No se te cobró nada.'
+    );
+    router.push('/onboarding/name');
+    return false;
+  };
   const { appConfig } = useAppConfig();
   const { t, idioma } = useIdioma();
   const { startCardForm } = useLocalSearchParams<{ startCardForm?: string }>();
@@ -293,6 +320,7 @@ export default function SubscriptionMembershipScreen() {
     setChangingCard(true);
     try {
       const currentUser = await exigirSesion();
+      if (currentUser && !(await exigirPerfilCompleto(currentUser.id))) return;
       if (!currentUser) { setChangingCard(false); return; }
 
       const [expMonthRaw, expYearRaw] = cardExpiry.split('/');
@@ -363,6 +391,7 @@ export default function SubscriptionMembershipScreen() {
     setProcessing(true);
     try {
       const currentUser = await exigirSesion();
+      if (currentUser && !(await exigirPerfilCompleto(currentUser.id))) return;
       if (!currentUser) { setProcessing(false); return; }
 
       const [expMonthRaw, expYearRaw] = cardExpiry.split('/');
