@@ -49,6 +49,48 @@ export async function validarMontoCupo(
   return { ok: true, minimo };
 }
 
+// Medios con que se paga un cupo suelto. NULL son las citas de julio y agosto
+// de 2026, de antes de que se guardara el medio: tambien eran compras por
+// evento. Debe coincidir con app/subscription-plans.tsx (fetchVirtualBalance).
+const FILTRO_COMPRAS_POR_EVENTO =
+  'payment_method.is.null,payment_method.in.(card,pse,nequi,bancolombia,banc,virtual_balance,directo,promo_code)';
+
+/**
+ * false si el interruptor "Pago por evento" del admin esta en oculto
+ * (app_config.ocultar_pago_por_evento = 'true') y esta persona nunca ha
+ * comprado un cupo suelto ni tiene saldo a favor. Es el mismo criterio con el
+ * que la app esconde la opcion; aqui se aplica tambien a quien tiene una
+ * version vieja de la app o la OTA sin aplicar (paso el 7 de noviembre de
+ * 2026: una usuaria nueva compro por evento en su primera sesion, con el
+ * codigo que traia el instalador).
+ *
+ * Ante cualquier error deja pasar: es preferible vender un cupo suelto de mas
+ * que bloquearle la compra a un cliente antiguo.
+ */
+export async function pagoPorEventoPermitido(servidor: SupabaseClient, userId: string): Promise<boolean> {
+  try {
+    const { data: conf, error: errConf } = await servidor
+      .from('app_config').select('value').eq('key', 'ocultar_pago_por_evento').maybeSingle();
+    if (errConf || conf?.value !== 'true') return true;
+
+    const { count, error } = await servidor
+      .from('appointments').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).or(FILTRO_COMPRAS_POR_EVENTO);
+    if (error || (count ?? 0) > 0) return true;
+
+    const { data: u, error: errU } = await servidor
+      .from('users').select('virtual_balance').eq('id', userId).maybeSingle();
+    if (errU || !u) return true;
+    return Number(u.virtual_balance || 0) > 0;
+  } catch {
+    return true;
+  }
+}
+
+/** Texto para quien ya no puede comprar un cupo suelto. */
+export const MENSAJE_SOLO_SUSCRIPCION =
+  'Para reservar ahora necesitas una suscripcion. Cierra la app por completo y vuelve a abrirla para ver los planes.';
+
 /** Texto para la persona cuando el monto no cuadra. Sin detalles internos. */
 export const MENSAJE_MONTO_INVALIDO =
   'El valor no coincide con el precio del evento. Cierra la pantalla de pago y vuelve a intentarlo.';

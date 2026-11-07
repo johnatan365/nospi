@@ -4,7 +4,7 @@
 // poder identificar pagos declinados sin perder de vista si luego se aprobo.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { validarMontoCupo, MENSAJE_MONTO_INVALIDO } from '../_shared/montoCupo.ts';
+import { validarMontoCupo, MENSAJE_MONTO_INVALIDO, pagoPorEventoPermitido, MENSAJE_SOLO_SUSCRIPCION } from '../_shared/montoCupo.ts';
 
 // Las llaves de Wompi NO van escritas aqui: este repositorio es publico.
 // Se cargan en Supabase > Project Settings > Edge Functions > Secrets.
@@ -46,6 +46,17 @@ Deno.serve(async (req: Request) => {
       console.warn('wompi-nequi-payment: monto rechazado', JSON.stringify({ error: validacionMonto.error, userId, eventId, amountCOP, minimo: validacionMonto.minimo }));
       return new Response(JSON.stringify({ error: MENSAJE_MONTO_INVALIDO }), {
         status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Interruptor "Pago por evento" del admin: a quien nunca ha comprado un
+    // cupo suelto no se le vende uno, aunque su app (vieja o sin la OTA)
+    // todavia muestre la opcion. Ver _shared/montoCupo.ts.
+    if (!(await pagoPorEventoPermitido(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), userId))) {
+      console.warn('wompi-nequi-payment: pago por evento oculto para cuenta nueva', JSON.stringify({ userId, eventId }));
+      return new Response(JSON.stringify({ error: MENSAJE_SOLO_SUSCRIPCION }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

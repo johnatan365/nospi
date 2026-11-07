@@ -31,6 +31,44 @@ import MatchPopup from "@/components/MatchPopup";
 SplashScreen.preventAutoHideAsync();
 
 // ---------------------------------------------------------------------------
+// OTA pendiente: aplicarla al abrir, no a la apertura siguiente.
+//
+// Con checkAutomatically ON_LOAD y fallbackToCacheTimeout 0, expo-updates baja
+// la OTA en segundo plano y la usa recien la PROXIMA vez que se abre la app.
+// El 7 de noviembre de 2026 una usuaria nueva instalo desde Play Store y
+// compro un cupo suelto en esa primera sesion, con el codigo que trae el
+// instalador, que no tenia el interruptor de "Pago por evento" del admin.
+//
+// Si la OTA nueva termina de bajar en los primeros 15 segundos (la persona
+// sigue en el splash o en la bienvenida), se recarga en ese momento. Si tarda
+// mas, se deja para la proxima apertura para no cortarle a nadie lo que esta
+// haciendo. Va en require() y en try: si expo-updates falla, no pasa nada.
+// ---------------------------------------------------------------------------
+const ARRANQUE_APP = Date.now();
+(function aplicarOtaPendienteAlArrancar() {
+  if (Platform.OS === "web" || __DEV__) return;
+  let Updates: any;
+  try {
+    Updates = require("expo-updates");
+  } catch {
+    return;
+  }
+  if (!Updates?.isEnabled || typeof Updates.checkForUpdateAsync !== "function") return;
+  (async () => {
+    try {
+      const revision = await Updates.checkForUpdateAsync();
+      if (!revision?.isAvailable) return;
+      const descarga = await Updates.fetchUpdateAsync();
+      if (!descarga?.isNew) return;
+      if (Date.now() - ARRANQUE_APP > 15000) return;
+      await Updates.reloadAsync();
+    } catch {
+      // Sin red, sin servidor de updates o lo que sea: se sigue con lo que hay.
+    }
+  })();
+})();
+
+// ---------------------------------------------------------------------------
 // Splash animado "Avatares que se juntan": círculos de colores (personas) que
 // entran desde los bordes y se agrupan en el centro, y luego aparece el logo.
 // Corre una sola vez al abrir la app, sobre el fondo real del splash (#1a0010),
