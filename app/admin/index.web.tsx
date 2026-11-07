@@ -1003,6 +1003,8 @@ export default function AdminPanelScreen() {
   const [configSubPrice6m, setConfigSubPrice6m] = useState('');
   // Interruptor de la prueba de solo-suscripcion (puerta 2). Ver PUERTA-2.md.
   const [configPuerta2, setConfigPuerta2] = useState(false);
+  // Oculta el pago por evento a todos en la app (solo queda la suscripcion).
+  const [configOcultarPagoEvento, setConfigOcultarPagoEvento] = useState(false);
   const [configMinAppVersion, setConfigMinAppVersion] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState<'success' | 'error' | null>(null);
@@ -2455,6 +2457,7 @@ export default function AdminPanelScreen() {
       if (row.key === 'subscription_price_3m') setConfigSubPrice3m(row.value);
       if (row.key === 'subscription_price_6m') setConfigSubPrice6m(row.value);
       if (row.key === 'prueba_solo_suscripcion') setConfigPuerta2(row.value === 'true');
+      if (row.key === 'ocultar_pago_por_evento') setConfigOcultarPagoEvento(row.value === 'true');
       if (row.key === 'min_app_version') setConfigMinAppVersion(row.value);
       if (row.key === 'traducir_comunidad') setConfigTraducirComunidad(row.value === 'true');
       if (row.key === 'traducir_canales') setConfigTraducirCanales(row.value !== 'false');
@@ -2656,6 +2659,7 @@ export default function AdminPanelScreen() {
         { key: 'subscription_price_3m', value: configSubPrice3m },
         { key: 'subscription_price_6m', value: configSubPrice6m },
         { key: 'prueba_solo_suscripcion', value: configPuerta2 ? 'true' : 'false' },
+        { key: 'ocultar_pago_por_evento', value: configOcultarPagoEvento ? 'true' : 'false' },
         { key: 'min_app_version', value: configMinAppVersion.trim() },
         { key: 'traducir_comunidad', value: configTraducirComunidad ? 'true' : 'false' },
         { key: 'traducir_canales', value: configTraducirCanales ? 'true' : 'false' },
@@ -8510,11 +8514,49 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         <Categoria
           titulo="💳 Precios y planes"
           descripcion="Lo que paga la gente por un evento y por la suscripción."
-          resumen={[configEventPrice && `evento $${Number(configEventPrice).toLocaleString('es-CO')}`, configSubscriptionPrice && `mes $${Number(configSubscriptionPrice).toLocaleString('es-CO')}`].filter(Boolean).join(' · ') || undefined}
+          resumen={[configOcultarPagoEvento ? 'pago por evento oculto a nuevos' : (configEventPrice && `evento $${Number(configEventPrice).toLocaleString('es-CO')}`), configSubscriptionPrice && `mes $${Number(configSubscriptionPrice).toLocaleString('es-CO')}`].filter(Boolean).join(' · ') || undefined}
           abierta={!!seccionesAbiertas.precios}
           onToggle={() => alternarSeccion("precios")}
         >
           <RejillaDeAjustes>
+            <Ajuste titulo="🎟️ Pago por evento" color={configOcultarPagoEvento ? '#B45309' : '#6B21A8'} borde={`4px solid ${configOcultarPagoEvento ? '#F59E0B' : '#6B21A8'}`}>
+              <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 20 }}>
+                Al ocultarlo, quien nunca ha pagado un evento suelto ya no ve esa opción: para reservar solo le aparecen los planes de suscripción. Quien ya compró por evento antes lo sigue viendo igual.
+              </div>
+              <div
+                onClick={() => setConfigOcultarPagoEvento(!configOcultarPagoEvento)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
+                  backgroundColor: configOcultarPagoEvento ? '#FEF3C7' : '#F5F3FF',
+                  borderRadius: 12, padding: '14px 18px',
+                  border: `2px solid ${configOcultarPagoEvento ? '#F59E0B' : '#DDD6FE'}`,
+                  transition: 'all 0.2s', userSelect: 'none',
+                }}
+              >
+                <div style={{
+                  width: 52, height: 28, borderRadius: 14, position: 'relative', flexShrink: 0,
+                  backgroundColor: configOcultarPagoEvento ? '#F59E0B' : '#7C3AED',
+                  transition: 'background 0.2s',
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 3, left: configOcultarPagoEvento ? 3 : 27,
+                    width: 22, height: 22, borderRadius: '50%', backgroundColor: 'white',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s',
+                  }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: configOcultarPagoEvento ? '#B45309' : '#6B21A8' }}>
+                    {configOcultarPagoEvento ? '🙈 Oculto para usuarios nuevos' : '👁️ Visible para todos'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+                    {configOcultarPagoEvento ? 'Los nuevos solo pueden reservar con suscripción' : 'Todos pueden pagar un evento suelto o suscribirse'}
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 14, lineHeight: 1.5 }}>
+                Se aplica al guardar y la gente lo ve la próxima vez que abra la app. También lo sigue viendo quien tenga saldo a favor, para poder usarlo.
+              </div>
+            </Ajuste>
             <Ajuste titulo="💰 Precio del Evento" color={'#6B21A8'} borde={'4px solid #6B21A8'}>
               <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 14 }}>
                 Valor en pesos colombianos (COP), sin puntos ni comas

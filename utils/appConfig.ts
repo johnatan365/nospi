@@ -11,6 +11,7 @@ export interface AppConfig {
   subscription_price_3m: string;     // plan de 3 meses
   subscription_price_6m: string;     // plan de 6 meses
   prueba_solo_suscripcion: string;   // 'true' | 'false' — interruptor de la prueba de solo-suscripcion
+  ocultar_pago_por_evento: string;   // 'true' | 'false' — oculta el pago por evento a TODOS; solo queda la suscripcion
   support_email: string;
   support_whatsapp: string;
   test_payment_enabled: string; // 'true' | 'false'
@@ -31,6 +32,7 @@ const DEFAULTS: AppConfig = {
   subscription_price_3m: '74900',
   subscription_price_6m: '125900',
   prueba_solo_suscripcion: 'false',
+  ocultar_pago_por_evento: 'false',
   support_email: 'soporte@nospi.app',
   support_whatsapp: '573192099123',
   test_payment_enabled: 'false',
@@ -73,6 +75,7 @@ export async function getAppConfig(): Promise<AppConfig> {
       if (row.key === 'subscription_price_3m') config.subscription_price_3m = row.value;
       if (row.key === 'subscription_price_6m') config.subscription_price_6m = row.value;
       if (row.key === 'prueba_solo_suscripcion') config.prueba_solo_suscripcion = row.value;
+      if (row.key === 'ocultar_pago_por_evento') config.ocultar_pago_por_evento = row.value;
       if (row.key === 'support_email') config.support_email = row.value;
       if (row.key === 'support_whatsapp') config.support_whatsapp = row.value;
       if (row.key === 'test_payment_enabled') config.test_payment_enabled = row.value;

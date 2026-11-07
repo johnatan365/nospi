@@ -238,7 +238,18 @@ export default function SubscriptionPlansScreen() {
   // real el 29 de septiembre de 2026. virtual_balance y solo_suscripcion se leen
   // en el mismo select de fetchVirtualBalance, asi que llegan juntos y no hay un
   // instante en que uno este listo y el otro no.
-  const ocultarPagoPorEvento = pruebaEncendida && soloSuscripcionUsuario && virtualBalance <= 0;
+  //
+  // Ademas, app_config.ocultar_pago_por_evento (interruptor "Pago por evento"
+  // del admin, en Precios y planes) lo oculta, pero SOLO a quien nunca ha
+  // comprado un evento suelto. Quien ya pago por evento lo sigue viendo: el
+  // dueno no quiere que nadie sienta que se le obliga a suscribirse. Mientras
+  // carga, yaComproPorEvento queda en true para no esconderle la opcion a un
+  // cliente antiguo ni por un instante. La excepcion del saldo virtual aplica
+  // igual.
+  const [yaComproPorEvento, setYaComproPorEvento] = useState(true);
+  const pagoPorEventoApagado = appConfig.ocultar_pago_por_evento === 'true' && !yaComproPorEvento;
+  const ocultarPagoPorEvento =
+    (pagoPorEventoApagado || (pruebaEncendida && soloSuscripcionUsuario)) && virtualBalance <= 0;
 
   // Suscripción: si el usuario tiene una suscripción activa, se confirma la
   // asistencia gratis sin pasar por ningún método de pago.
@@ -360,7 +371,17 @@ export default function SubscriptionPlansScreen() {
   const fetchVirtualBalance = useCallback(async () => {
     try {
       setLoadingBalance(true);
-      const { data } = await supabase.from('users').select('virtual_balance, email, name, solo_suscripcion').eq('id', user?.id).single();
+      // Compras por evento: cualquier cita pagada con un medio de pago o con
+      // saldo, aunque despues la haya cancelado. payment_method NULL son las
+      // citas de julio y agosto de 2026, de antes de que se guardara el medio:
+      // eran compras por evento. No cuentan suscripcion, cortesia ni free.
+      // Si la consulta falla, se asume que si compro (se le muestra la opcion).
+      const [{ data }, compras] = await Promise.all([
+        supabase.from('users').select('virtual_balance, email, name, solo_suscripcion').eq('id', user?.id).single(),
+        supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('user_id', user?.id)
+          .or('payment_method.is.null,payment_method.in.(card,pse,nequi,bancolombia,banc,virtual_balance,directo,promo_code)'),
+      ]);
+      setYaComproPorEvento(!!compras.error || (compras.count ?? 0) > 0);
       setVirtualBalance(data?.virtual_balance || 0);
       if (data) setUserProfile({ email: data.email || '', name: data.name || '' });
       if (data) setSoloSuscripcionUsuario(!!data.solo_suscripcion);
