@@ -20,16 +20,33 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { nospiColors } from '@/constants/Colors';
 import { supabaseRecovery } from '@/lib/supabase';
+import { dejarRastro, reportarError } from '@/lib/rastro';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
 export default function ForgotPasswordScreen() {
   const { t } = useIdioma();
   const router = useRouter();
 
+  // Migas para el negro de Android. Si el rastro llega a 'monto' pero no a
+  // 'pinta exito', el problema esta en el renderizado de la confirmacion; si
+  // ni siquiera llega a 'monto', esta antes. Ver lib/rastro.ts.
+  React.useEffect(() => {
+    dejarRastro('forgot-password', 'monto la pantalla');
+  }, []);
+
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+
+  // La miga decisiva: este efecto solo corre si React alcanzo a pintar la
+  // pantalla de confirmacion. Si en la tabla aparece 'correo enviado' pero
+  // nunca 'pinte la confirmacion', el problema esta en ese render. Si
+  // aparecen las dos y la persona sigue viendo negro, React si pinto y lo que
+  // falla es como Android lo muestra (alto cero, contenido fuera de pantalla).
+  React.useEffect(() => {
+    if (sent) dejarRastro('forgot-password', 'pinte la confirmacion');
+  }, [sent]);
 
   const handleSubmit = async () => {
     // Normalizado a minusculas: el correo se guarda asi en auth.users, y hay
@@ -95,8 +112,10 @@ export default function ForgotPasswordScreen() {
 
       // Por seguridad no revelamos si el email existe o no en el sistema —
       // siempre mostramos el mismo mensaje de éxito.
+      dejarRastro('forgot-password', 'correo enviado, voy a pintar la confirmacion');
       setSent(true);
     } catch (err: any) {
+      reportarError('forgot-password', err, { paso: 'handleSubmit' });
       console.error('[ForgotPassword] Unexpected error:', err);
       setError('No pudimos enviar el correo. Intenta de nuevo.');
     } finally {

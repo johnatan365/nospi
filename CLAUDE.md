@@ -86,3 +86,36 @@ el historial.
   `CREATE TRIGGER` pide bloqueo exclusivo y puede congelar la dinamica.
 - **Los mensajes de WhatsApp van sin emojis y sin tildes** (se rompen al pasar
   por `wa.me`), y nunca dicen "gratis": se dice "por cuenta de la casa".
+
+## Antes de arreglar un bug de la app: mira el rastro, no adivines
+
+Hay una tabla `errores_app` en Supabase. Guarda errores y migas de pasos de la
+app: que pantalla, que paso, mensaje, stack, plataforma, version de la app y
+del sistema operativo. Se escribe desde `lib/rastro.ts`
+(`dejarRastro` y `reportarError`).
+
+**Cuando alguien reporte que una pantalla falla, se queda en blanco o en
+negro, consulta esa tabla ANTES de tocar una sola linea.** Filtra por
+`pantalla` y por fecha. Si el rastro se corta en un paso concreto, ahi esta el
+problema.
+
+Por que esta escrito aqui: el 8 de noviembre de 2026 la pantalla de recuperar
+contrasena se quedaba en negro en Android. Se cambio el componente de teclado
+culpandolo sin evidencia, se publico por OTA, y la persona siguio viendo
+negro. Ese cambio ademas borro los comentarios que explicaban decisiones
+viejas. La causa real nunca se encontro por lectura de codigo: el archivo es
+estructuralmente identico a `login.tsx`, que funciona. Lo que faltaba no era
+criterio, era un dato.
+
+Dos reglas que salieron de ahi:
+
+1. **Nada se publica por OTA sin que alguien haya verificado que arregla lo
+   que dice arreglar.** Un OTA llega a la gente en minutos; una conjetura
+   publicada cuesta mas que el bug.
+2. **No borres los comentarios largos que explican por que algo esta como
+   esta.** En este repo documentan incidentes que ya costaron caro. Si un
+   comentario sobra, ya lo habriamos quitado.
+
+Y si el `ErrorBoundary` (`components/ErrorBoundary.tsx`) no mostro su pantalla
+de carita triste, lo que fallo NO es un crash de React: no pierdas tiempo
+buscando una excepcion en el render.
