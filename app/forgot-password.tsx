@@ -9,16 +9,19 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  KeyboardAvoidingView,
 } from 'react-native';
+// El KeyboardAvoidingView de react-native no compensa nada en Android con
+// edge-to-edge (la ventana ya no se encoge al abrir el teclado). Este mide el
+// teclado de verdad y usa el mismo behavior en las dos plataformas.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Stack } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { nospiColors } from '@/constants/Colors';
 import { supabaseRecovery } from '@/lib/supabase';
-import { useIdioma } from '@/contexts/IdiomaContext';
 
+import { useIdioma } from '@/contexts/IdiomaContext';
 export default function ForgotPasswordScreen() {
   const { t } = useIdioma();
   const router = useRouter();
@@ -29,6 +32,10 @@ export default function ForgotPasswordScreen() {
   const [sent, setSent] = useState(false);
 
   const handleSubmit = async () => {
+    // Normalizado a minusculas: el correo se guarda asi en auth.users, y hay
+    // gente que lo escribe con la primera en mayuscula (el teclado de Android
+    // la pone solo). La RPC ya no distingue mayusculas, pero igual conviene
+    // mandar siempre la misma forma.
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
       setError('Por favor ingresa tu email');
@@ -39,13 +46,32 @@ export default function ForgotPasswordScreen() {
     setError('');
 
     try {
+      // El link de recuperación debe abrir en CUALQUIER navegador / cliente de
+      // correo. Antes, en la app nativa apuntaba a un deep link 'nospi://...'
+      // que muchos correos (Hotmail/Outlook/Gmail) NO abren, y el usuario veía
+      // "el link no abre". Ahora siempre mandamos a una URL https real: la web
+      // de Nospi (app.nospi.co/auth/callback), que ya sabe procesar el link de
+      // recovery y llevar a la pantalla de nueva contraseña. Funciona en web,
+      // iOS y Android por igual.
       const redirectTo =
         Platform.OS === 'web'
           ? `${window.location.origin}/auth/callback`
           : 'https://app.nospi.co/auth/callback';
 
-      // Si la consulta de existencia falla, no bloqueamos la recuperación:
-      // se envía la solicitud normal y se muestra el mensaje genérico.
+      // Antes se mandaba el correo a ciegas y SIEMPRE se mostraba "revisa tu
+      // correo", existiera la cuenta o no. Quien se equivocaba al escribir
+      // quedaba esperando un enlace que nunca iba a llegar: paso el 27 de
+      // octubre de 2026, alguien lo intento cuatro veces y termino escribiendo
+      // a soporte.
+      //
+      // Ahora se pregunta primero. La funcion del servidor limita a 12
+      // consultas por hora desde el mismo origen y, pasado ese tope, responde
+      // siempre que si existe, para que nadie pueda ir probando listas de
+      // correos y averiguar quien tiene cuenta en Nospi.
+      //
+      // Si la consulta falla por lo que sea, se sigue de largo y se manda el
+      // correo igual: es preferible el mensaje generico de siempre a dejar a
+      // la persona sin poder recuperar su cuenta.
       try {
         const { data: tieneCuenta, error: errorConsulta } = await supabaseRecovery
           .rpc('correo_tiene_cuenta', { p_email: normalizedEmail });
@@ -53,8 +79,8 @@ export default function ForgotPasswordScreen() {
           setError(t('pw.correoNoRegistrado'));
           return;
         }
-      } catch (verificationError) {
-        console.warn('[ForgotPassword] No se pudo verificar el correo:', verificationError);
+      } catch (e) {
+        console.warn('[ForgotPassword] no se pudo verificar el correo:', e);
       }
 
       const { error: resetError } = await supabaseRecovery.auth.resetPasswordForEmail(normalizedEmail, {
@@ -67,8 +93,10 @@ export default function ForgotPasswordScreen() {
         return;
       }
 
+      // Por seguridad no revelamos si el email existe o no en el sistema —
+      // siempre mostramos el mismo mensaje de éxito.
       setSent(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[ForgotPassword] Unexpected error:', err);
       setError('No pudimos enviar el correo. Intenta de nuevo.');
     } finally {
@@ -85,10 +113,7 @@ export default function ForgotPasswordScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       >
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <ScrollView
             contentContainerStyle={styles.container}
             keyboardShouldPersistTaps="handled"
@@ -111,6 +136,7 @@ export default function ForgotPasswordScreen() {
                     Si {email.trim()} tiene una cuenta en Nospi, te enviamos un link para restablecer tu
                     contraseña. Revisa también la carpeta de spam.
                   </Text>
+
                   <TouchableOpacity
                     style={styles.submitButton}
                     onPress={() => router.replace('/login')}
