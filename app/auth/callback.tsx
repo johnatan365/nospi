@@ -11,13 +11,32 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { supabase } from '@/lib/supabase';
+import { supabase, RECOVERY_FLOW_DETECTED_ON_LOAD } from '@/lib/supabase';
+import { dejarRastro } from '@/lib/rastro';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
 export default function AuthCallback() {
   const { t } = useIdioma();
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
+  const navegoRef = React.useRef(false);
+
+  // Red de seguridad: pase lo que pase, nadie se queda en esta pantalla.
+  // Si a los 10 segundos nadie navego, se sale al login con un aviso. Vale
+  // mil veces mas un "el enlace no se pudo abrir" que un rectangulo mudo.
+  React.useEffect(() => {
+    const reloj = setTimeout(() => {
+      if (navegoRef.current) return;
+      dejarRastro('auth/callback', 'me quede atascado 10s, salgo al login');
+      navegoRef.current = true;
+      router.replace('/login?error=oauth_error');
+    }, 10000);
+    return () => clearTimeout(reloj);
+  }, [router]);
+
+  React.useEffect(() => {
+    dejarRastro('auth/callback', 'monto la pantalla', { plataforma: Platform.OS });
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -64,6 +83,8 @@ export default function AuthCallback() {
               console.warn('callback.tsx: nativo — falló el canje del code:', error.message);
             }
           }
+          navegoRef.current = true;
+          dejarRastro('auth/callback', 'voy a reset-password');
           router.replace('/reset-password');
           return;
         }
@@ -71,6 +92,7 @@ export default function AuthCallback() {
         // Si llegamos aquí desde un login (no registro), esperar la sesión y navegar.
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
+          navegoRef.current = true;
           router.replace('/');
         }
         // Si no hay sesión, register.tsx está procesando — no hacer nada
@@ -96,7 +118,20 @@ export default function AuthCallback() {
       try {
         const url = window.location.href;
         console.log('[AuthCallback] Processing OAuth callback:', url);
-        const isRecovery = url.includes('type=recovery');
+        // No basta con mirar el hash. El cliente principal usa
+        // detectSessionInUrl en web, asi que Supabase consume y LIMPIA
+        // '#access_token=...&type=recovery' de forma asincrona, a veces antes
+        // de que este efecto lo lea. Cuando eso pasaba, isRecovery quedaba en
+        // false, el destino era '/' y la persona terminaba dentro de la app
+        // sin haber puesto nunca su contrasena nueva — que es justo lo que
+        // paso el 8 de noviembre: abrio el enlace tres veces, quedo con sesion
+        // y la clave siguio siendo la vieja.
+        //
+        // RECOVERY_FLOW_DETECTED_ON_LOAD se calcula una sola vez al importar
+        // lib/supabase.ts, antes de que createClient() toque el hash. Existia
+        // desde hace tiempo para esto, pero esta pantalla no lo usaba.
+        const isRecovery =
+          url.includes('type=recovery') || RECOVERY_FLOW_DETECTED_ON_LOAD;
 
         const search = window.location.search;
         const hash = window.location.hash;
@@ -138,16 +173,21 @@ export default function AuthCallback() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           console.log('[AuthCallback] Session confirmed, redirecting to', destination);
-          router.replace(destination as any);
+          navegoRef.current = true;
+            dejarRastro('auth/callback', 'navego a ' + destination);
+            router.replace(destination as any);
         } else {
           console.log('[AuthCallback] No session yet, waiting...');
           await new Promise(resolve => setTimeout(resolve, 1000));
           const { data: { session: session2 } } = await supabase.auth.getSession();
           if (session2) {
             console.log('[AuthCallback] Session confirmed after wait, redirecting to', destination);
+            navegoRef.current = true;
+            dejarRastro('auth/callback', 'navego a ' + destination);
             router.replace(destination as any);
           } else {
             console.warn('[AuthCallback] No session after wait, redirecting to login');
+            navegoRef.current = true;
             router.replace('/login?error=oauth_error');
           }
         }
@@ -161,10 +201,20 @@ export default function AuthCallback() {
     handleCallback();
   }, []);
 
-  // Android: no renderiza nada visible — redirige inmediatamente
-  if (Platform.OS !== 'web') {
-    return <View style={styles.container} />;
-  }
+  // ANTES esta rama devolvia <View style={styles.container} /> — una pantalla
+  // entera del color #1a0010, es decir negra, con NADA encima: ni spinner, ni
+  // texto, ni salida. El comentario decia "redirige inmediatamente", y mientras
+  // el redirect ocurre eso se ve bien. El problema es cuando NO ocurre: si
+  // getInitialURL() viene vacio y el evento 'url' no llega, la persona se queda
+  // mirando un rectangulo negro para siempre.
+  //
+  // Eso es exactamente la "pantalla negra" que se reporto el 8 y el 9 de
+  // noviembre de 2026 al abrir el enlace de recuperar contrasena. No era un
+  // crash (el ErrorBoundary nunca se disparo) ni la pantalla de forgot-password
+  // (esa pinta bien): era esta.
+  //
+  // Ahora pinta lo mismo que en web, y el temporizador de abajo garantiza que
+  // nadie se quede encerrado.
 
   return (
     <View style={styles.container}>
