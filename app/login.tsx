@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 // El KeyboardAvoidingView de react-native no compensa nada en Android con
 // edge-to-edge (la ventana ya no se encoge al abrir el teclado). Este mide el
@@ -48,6 +49,29 @@ export default function LoginScreen() {
       setError(t('login.cuentaYaExiste'));
     }
   }, [routeError]);
+
+  // En Android la pantalla nativa de recuperar contrasena se queda en negro
+  // despues de enviar el correo. Paso el 8 de noviembre de 2026: la persona
+  // pidio el enlace tres veces porque no veia ninguna confirmacion, y los tres
+  // correos si salieron. La causa no esta identificada — el archivo es
+  // estructuralmente igual a esta pantalla, que si funciona en Android — y ya
+  // se intento un arreglo a ciegas (e99e887) que se publico por OTA y no
+  // sirvio.
+  //
+  // Mientras se encuentra, en Android se abre la version web del MISMO
+  // componente: es el mismo codigo renderizado por el navegador, donde el
+  // problema no aparece. iOS y web siguen usando la pantalla de adentro, que
+  // ahi funciona bien. Si el navegador no abre, se cae a la pantalla nativa:
+  // peor es no tener nada.
+  const abrirRecuperarContrasena = () => {
+    if (Platform.OS === 'android') {
+      Linking.openURL('https://app.nospi.co/forgot-password').catch(() => {
+        router.push('/forgot-password');
+      });
+      return;
+    }
+    router.push('/forgot-password');
+  };
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -336,7 +360,7 @@ export default function LoginScreen() {
                 {!isSignUp ? (
                   <TouchableOpacity
                     style={styles.forgotPasswordButton}
-                    onPress={() => router.push('/forgot-password')}
+                    onPress={abrirRecuperarContrasena}
                     disabled={isLoading}
                     activeOpacity={0.7}
                   >
