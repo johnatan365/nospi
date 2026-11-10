@@ -43,7 +43,7 @@ type EventoTexto = {
   date?: string | null;
 };
 
-const TIPOS_CON_CLAVE = ['bar', 'caminata', 'cafe', 'bolos', 'virtual'];
+const TIPOS_CON_CLAVE = ['bar', 'baile', 'karaoke', 'caminata', 'cafe', 'bolos', 'virtual'];
 
 function claveTipo(tipo?: string | null): string {
   return TIPOS_CON_CLAVE.includes(tipo || '') ? `evento.tipo.${tipo}` : 'evento.tipo.restaurante';

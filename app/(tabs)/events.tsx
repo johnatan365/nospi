@@ -317,7 +317,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionHeader}>{t(CLAVE_SECCION[section] ?? 'eventos.sinFecha')}</Text>
 
                 {sectionEvents.map((event) => {
-                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : '🍽️';
+                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : event.type === 'karaoke' ? '🎤' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
                   const esVirtual = event.type === 'virtual';
@@ -340,6 +340,10 @@ export default function EventsScreen() {
                       ) : event.type === 'baile' ? (
                         <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
                           <Image source={require('@/assets/images/icon-baile.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
+                        </View>
+                      ) : event.type === 'karaoke' ? (
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-karaoke.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bar' ? (
                         <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>

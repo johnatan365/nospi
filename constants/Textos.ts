@@ -26,6 +26,7 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     // ---------- Tipos de evento ----------
     'evento.tipo.bar': 'Bar',
     'evento.tipo.baile': 'Baile',
+    'evento.tipo.karaoke': 'Karaoke',
     'evento.tipo.caminata': 'Caminata',
     'evento.tipo.cafe': 'Café',
     'evento.tipo.bolos': 'Bolos',
@@ -1265,6 +1266,7 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     // ---------- Tipos de evento ----------
     'evento.tipo.bar': 'Bar',
     'evento.tipo.baile': 'Dancing',
+    'evento.tipo.karaoke': 'Karaoke',
     'evento.tipo.caminata': 'Hike',
     'evento.tipo.cafe': 'Coffee',
     'evento.tipo.bolos': 'Bowling',

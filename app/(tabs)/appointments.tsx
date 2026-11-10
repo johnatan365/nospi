@@ -427,8 +427,8 @@ export default function AppointmentsScreen() {
               if (!appointment.event) return null;
 
               const eventType = appointment.event.type || 'restaurant';
-              const eventTypeText = t(['bar', 'baile', 'caminata', 'cafe', 'bolos', 'virtual'].includes(eventType) ? `evento.tipo.${eventType}` : 'evento.tipo.restaurante');
-              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : '🍽️';
+              const eventTypeText = t(['bar', 'baile', 'karaoke', 'caminata', 'cafe', 'bolos', 'virtual'].includes(eventType) ? `evento.tipo.${eventType}` : 'evento.tipo.restaurante');
+              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : eventType === 'karaoke' ? '🎤' : '🍽️';
               const eventName = nombreEventoIdioma(appointment.event, idioma, t) || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
@@ -536,6 +536,10 @@ export default function AppointmentsScreen() {
                     ) : eventType === 'baile' ? (
                       <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>
                         <Image source={require('@/assets/images/icon-baile.png')} style={{ width: 54, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+                      </View>
+                    ) : eventType === 'karaoke' ? (
+                      <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-karaoke.png')} style={{ width: 54, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
                       </View>
                     ) : eventType === 'bar' ? (
                       <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>
