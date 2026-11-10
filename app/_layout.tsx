@@ -1,4 +1,9 @@
 import "react-native-url-polyfill/auto";
+// Debe importarse en el arranque, antes de cualquier navegacion: deja el
+// listener de deep links puesto desde el primer instante. Si se importara solo
+// desde la pantalla que lo usa, el enlace del correo llegaria antes de que esa
+// pantalla exista y se perderia. Ver el comentario de lib/enlaces.ts.
+import "@/lib/enlaces";
 import { useNetworkState } from "expo-network";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";

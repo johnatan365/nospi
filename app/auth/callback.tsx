@@ -10,9 +10,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Linking from 'expo-linking';
 import { supabase, RECOVERY_FLOW_DETECTED_ON_LOAD } from '@/lib/supabase';
 import { dejarRastro } from '@/lib/rastro';
+import { alRecibirEnlace, olvidarUltimoEnlace } from '@/lib/enlaces';
 
 import { useIdioma } from '@/contexts/IdiomaContext';
 export default function AuthCallback() {
@@ -62,6 +62,17 @@ export default function AuthCallback() {
       const handleUrl = async (incomingUrl: string) => {
         const params = parseParams(incomingUrl);
 
+        // Miga decisiva. Distingue dos fallas que en errores_app se veian
+        // identicas: que el enlace no llegue, y que llegue vacio (Android
+        // puede entregar el enlace sin el fragmento '#...', y ahi el token se
+        // pierde por el camino). Van solo los NOMBRES de los parametros,
+        // nunca los valores: en access_token va la llave de la sesion.
+        dejarRastro('auth/callback', 'recibi el enlace', {
+          claves: Object.keys(params),
+          tiene_hash: incomingUrl.includes('#'),
+          tiene_query: incomingUrl.includes('?'),
+        });
+
         // Un link de recuperacion se reconoce por 'type=recovery' (implicit).
         // Antes solo se miraba eso, y los links PKCE — que traen '?code=' y
         // NINGUN 'type=recovery' — se colaban sin ser detectados: la app abria
@@ -93,24 +104,43 @@ export default function AuthCallback() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           navegoRef.current = true;
+          dejarRastro('auth/callback', 'navego a /');
           router.replace('/');
+          return;
         }
         // Si no hay sesión, register.tsx está procesando — no hacer nada
+        dejarRastro('auth/callback', 'no era recuperacion y no hay sesion, espero a register');
       };
 
-      // getInitialURL solo devuelve el link cuando la app arranca en frio. Si
-      // ya estaba abierta en segundo plano — el caso normal de quien acaba de
-      // pedir el correo desde la app — el link llegaba por el evento 'url' y
-      // se ignoraba por completo. Hay que escuchar los dos.
-      (async () => {
-        const initial = (await Linking.getInitialURL()) || '';
-        if (initial) await handleUrl(initial);
-      })();
-
-      const sub = Linking.addEventListener('url', ({ url }) => {
-        if (url) handleUrl(url);
+      // El enlace NO se escucha desde aqui. Lo captura lib/enlaces.ts desde
+      // que arranca la app, y esta pantalla solo va a recogerlo.
+      //
+      // Antes se hacia al contrario: getInitialURL() mas un
+      // addEventListener('url') registrados en este mismo efecto. Eso sirve
+      // cuando la app arranca en frio desde el enlace, pero no en el caso
+      // normal de recuperar contrasena, con la app viva en segundo plano: ahi
+      // Android entrega el enlace, expo-router navega hasta aca, y solo
+      // DESPUES se monta la pantalla y registra el listener. El evento ya
+      // paso. Las cuatro pruebas de Android del 10 de noviembre de 2026
+      // quedaron en errores_app con 'monto la pantalla' y, diez segundos
+      // despues, 'me quede atascado 10s'.
+      let llegoAlgunEnlace = false;
+      const cancelar = alRecibirEnlace((url) => {
+        llegoAlgunEnlace = true;
+        olvidarUltimoEnlace();
+        handleUrl(url);
       });
-      return () => sub.remove();
+
+      const avisoSinEnlace = setTimeout(() => {
+        if (!navegoRef.current && !llegoAlgunEnlace) {
+          dejarRastro('auth/callback', 'a los 4s no habia llegado ningun enlace');
+        }
+      }, 4000);
+
+      return () => {
+        cancelar();
+        clearTimeout(avisoSinEnlace);
+      };
     }
 
     // Web: manejar el OAuth redirect normalmente
