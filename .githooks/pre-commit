@@ -39,6 +39,10 @@ buscar "Secreto de webhook propio"         'nospi_[a-z]+_wh[_a-z]*_[A-Za-z0-9]{6
 # CRON_SECRET, WEBHOOK_SECRET, API_KEY, TOKEN... Atrapa los que no siguen
 # ningun patron reconocible, como el CRON_SECRET que estuvo publico.
 buscar "Secreto asignado en el codigo"     '(SECRET|TOKEN|API_KEY|PASSWORD|PRIVATE_KEY)[A-Z_]* *= *.[A-Za-z0-9_/+-]{16,}.'
+# Un token hexadecimal largo entre comillas (24+ bytes). Asi era el de
+# traducir-contenido y resolve-event-location, que estuvo publico hasta
+# noviembre de 2026. 44+ para no tomar hashes de commit (40).
+buscar "Token hexadecimal entre comillas"  '["'"'"'][0-9a-f]{44,}["'"'"']'
 buscar "Token de GitHub"                   'gh[pousr]_[A-Za-z0-9]{20,}'
 buscar "Token de Expo"                     'eas_[A-Za-z0-9]{20,}|expo_[A-Za-z0-9]{20,}'
 buscar "Llave de Google"                   'AIza[0-9A-Za-z_-]{30,}'

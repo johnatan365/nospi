@@ -1,7 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { secretoValido } from "../_shared/secretoServidor.ts";
 
-const WEBHOOK_TOKEN = "7bb46a6e95dfdc543cab8eaf1e072e81ec9cbb7e11e7ac6d";
+// La llama el trigger trigger_resolve_event_location (al crear o cambiar el
+// maps_link de un evento) con x-webhook-token = public.secreto('ubicacion_wh').
+// El valor vive solo en public.secretos_servidor. Hasta noviembre de 2026 era
+// un token escrito aqui, el mismo de traducir-contenido, y quedo publico.
 
 // Headers de navegador. Google suele servir la pagina directa (con coords) a un
 // User-Agent de navegador, en vez de mandar a la pagina de consentimiento.
@@ -252,8 +256,7 @@ async function resolveCoords(
 
 Deno.serve(async (req: Request) => {
   try {
-    const token = req.headers.get("x-webhook-token");
-    if (token !== WEBHOOK_TOKEN) {
+    if (!(await secretoValido("ubicacion_wh", req.headers.get("x-webhook-token")))) {
       return new Response(JSON.stringify({ success: false, error: "unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },

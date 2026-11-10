@@ -2623,9 +2623,12 @@ export default function AdminPanelScreen() {
     setUsoTraduccionError(null);
     setCargandoUso(true);
     try {
+      // Va con la sesion del admin (invoke la manda sola) y la funcion
+      // comprueba is_admin(). No le pongas un token: este archivo se compila
+      // al navegador, y hasta noviembre de 2026 llevaba el secreto de los
+      // triggers de traduccion a la vista de cualquiera.
       const { data, error } = await supabase.functions.invoke('traducir-contenido', {
         body: { tipo: 'uso' },
-        headers: { 'x-webhook-token': '7bb46a6e95dfdc543cab8eaf1e072e81ec9cbb7e11e7ac6d' },
       });
       if (error) {
         setUsoTraduccionError('No se pudo consultar DeepL: ' + (error.message || 'error de red'));

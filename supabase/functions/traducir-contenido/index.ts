@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { secretoValido } from "../_shared/secretoServidor.ts";
 
 // Traduce al ingles el contenido que escribe el equipo de Nospi: el nombre y la
 // descripcion de un evento, las preguntas de la dinamica, los mensajes y
@@ -8,16 +9,47 @@ import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
 //
 // Los interruptores viven en app_config (traducir_comunidad, traducir_canales,
 // traducir_eventos, traducir_preguntas, traducir_bios).
+//
+// Quien puede llamarla:
+//  - Los triggers de Postgres (pedir_traduccion_*), con el header
+//    x-webhook-token = public.secreto('traducir_wh'). El valor vive solo en
+//    public.secretos_servidor; aqui se valida contra esa misma fila.
+//  - Un admin con SU PROPIA sesion, y solo para tipo 'uso' (el saldo de DeepL
+//    que muestra el panel). Se comprueba con is_admin() en la base.
+//
+// Hasta noviembre de 2026 el token estaba escrito en este archivo, en
+// resolve-event-location, en una migracion y en el admin web, que lo mandaba
+// desde el navegador: cualquiera que abriera el bundle del admin lo podia leer
+// y gastar el saldo de DeepL o reescribir traducciones. El admin no lleva
+// ningun secreto; no lo vuelvas a poner ahi.
 
-const WEBHOOK_TOKEN = "7bb46a6e95dfdc543cab8eaf1e072e81ec9cbb7e11e7ac6d";
 const MAX_POR_LLAMADA = 120;
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-webhook-token",
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/** true si el Authorization de la peticion es la sesion de un admin. */
+async function esAdmin(req: Request): Promise<boolean> {
+  const auth = req.headers.get("Authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) return false;
+  const url = Deno.env.get("SUPABASE_URL");
+  const anon = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anon) return false;
+  try {
+    const comoQuienLlama = createClient(url, anon, {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await comoQuienLlama.rpc("is_admin");
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -112,13 +144,15 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: CORS });
   }
   try {
-    if (req.headers.get("x-webhook-token") !== WEBHOOK_TOKEN) {
+    const body = await req.json().catch(() => ({}));
+    const tipo = String(body?.tipo ?? "");
+
+    const porTrigger = await secretoValido("traducir_wh", req.headers.get("x-webhook-token"));
+    if (!porTrigger && !(tipo === "uso" && (await esAdmin(req)))) {
       return json({ success: false, error: "unauthorized" }, 401);
     }
 
     const quien = proveedor();
-    const body = await req.json().catch(() => ({}));
-    const tipo = String(body?.tipo ?? "");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
