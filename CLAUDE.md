@@ -119,3 +119,53 @@ Dos reglas que salieron de ahi:
 Y si el `ErrorBoundary` (`components/ErrorBoundary.tsx`) no mostro su pantalla
 de carita triste, lo que fallo NO es un crash de React: no pierdas tiempo
 buscando una excepcion en el render.
+
+## Un arreglo no esta en los celulares hasta que se publica una OTA DESPUES
+
+El commit en `main` no cambia nada en el telefono de nadie. Lo que llega a la
+gente es la OTA (`.github/workflows/ota.yml`, se dispara a mano). Y la OTA
+empaqueta lo que hubiera en `main` **en el momento en que corrio**: una OTA
+publicada antes del commit no lleva el arreglo, aunque las dos cosas pasaran
+el mismo dia.
+
+**Antes de decirle a alguien que pruebe, compara dos horas:** la del commit y
+la de la ultima OTA. Si la OTA es anterior, el arreglo no esta en su celular y
+la prueba no mide nada.
+
+De donde salio esto: el 9 de noviembre de 2026 se arreglo la pantalla negra a
+las 9:37 p.m. y la ultima OTA habia corrido a las 5:02 p.m. La clienta probo
+tres veces mas, siguio viendo negro, y se dio por fallido un arreglo que
+estaba bien — nunca habia salido del repositorio. La forma de darse cuenta fue
+`errores_app`: cero migas de Android. Si el codigo deja migas y no llega
+ninguna, sospecha de la distribucion antes que del codigo.
+
+El boton verde de "Run workflow" en GitHub Actions **no desaparece nunca**: es
+el lanzador, no un indicador de que algo este pendiente. Para saber si una OTA
+corrio, mira la lista de ejecuciones y su hora.
+
+## Deep links: el enlace llega antes que la pantalla
+
+Un `Linking.addEventListener('url', ...)` registrado dentro del `useEffect` de
+una pantalla **llega tarde** cuando la app venia en segundo plano, que es el
+caso normal de quien vuelve del correo. El orden real es: el sistema entrega
+el enlace, `expo-router` navega a la pantalla, y solo DESPUES esa pantalla se
+monta y registra su detector. El evento ya paso. Y `getInitialURL()` devuelve
+el enlace del arranque en frio, que no es el que acaba de llegar.
+
+El detector va **a nivel de app**, importado en `app/_layout.tsx` antes de
+cualquier navegacion. Eso es `lib/enlaces.ts`: guarda el ultimo enlace desde
+el arranque, y la pantalla va a recogerlo en vez de escuchar. Si necesitas
+procesar deep links en una pantalla nueva, usa `alRecibirEnlace` de ahi, no
+`expo-linking` directo.
+
+Ojo tambien con quien abre el enlace. `app.nospi.co/auth/callback` esta
+declarado como App Link con `autoVerify` en `app.json`, asi que en Android el
+enlace entra por la app; en iOS, que no tiene `associatedDomains`, abre
+Safari. Son dos caminos distintos en el mismo archivo y hay que probar los
+dos. Un bug que "solo pasa con Gmail" casi nunca es del proveedor de correo:
+es que ese cliente le pasa el enlace a la app y el otro lo manda al navegador.
+
+Esto se encontro el 10 de noviembre de 2026 con la miga `recibi el enlace`,
+que quedo con fecha 90 milisegundos ANTES de `monto la pantalla`. Esa
+diferencia era todo el bug. Si vuelves a tocar este flujo, no borres esas
+migas: son la unica forma de ver el orden.
