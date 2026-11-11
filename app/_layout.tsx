@@ -233,7 +233,6 @@ function RootLayoutInner() {
             <Stack.Screen name="event-details/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="chat/[conversationId]" options={{ headerShown: false }} />
             <Stack.Screen name="catch-up-rating/[eventId]" options={{ headerShown: false }} />
-            <Stack.Screen name="idioma-mesa" options={{ headerShown: false }} />
             <Stack.Screen name="subscription-plans" options={{ headerShown: false }} />
             <Stack.Screen name="politica-asistencia" options={{ headerShown: false }} />
             <Stack.Screen name="admin" options={{ headerShown: false }} />
