@@ -1347,6 +1347,12 @@ export default function DinamicaScreen() {
   // por fuera de la llamada por un error nuestro.
   const handleIrAMeet = useCallback(async () => {
     if (abriendoMeet || !appointment) return;
+    // Videollamada: la primera entrada espera a la hora del evento (ver
+    // yaEsLaHora en el render). Volver a la llamada despues no se frena.
+    if (appointment.event?.type === 'virtual' && !fueAMeet && appointment.event.start_time
+        && Date.now() < new Date(appointment.event.start_time).getTime()) {
+      return;
+    }
     setAbriendoMeet(true);
     try {
       // La caché puede traer el evento sin meet_link: en ese caso se lee de la base.
@@ -1607,6 +1613,14 @@ export default function DinamicaScreen() {
       .toLocaleTimeString(localeDe(idioma), { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
     const fechaTexto = new Date(inicioMs).toLocaleDateString(localeDe(idioma), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
     const confirmado = checkInPhase === 'confirmed' && appointment.location_confirmed;
+    // A Meet se entra a la HORA del evento, no antes, aunque ya haya
+    // moderador. Hasta el 11 de noviembre de 2026 el boton aparecia apenas
+    // alguien se ofrecia de moderador: ese dia cuatro personas entraron a las
+    // 8:51 a una llamada de las 9:00, antes que la moderadora. Antes de la hora
+    // se puede confirmar y ofrecerse de moderador; solo se espera para entrar.
+    const yaEsLaHora = faltaMs <= 0;
+    const horaEntrada = new Date(inicioMs)
+      .toLocaleTimeString(localeDe(idioma), { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
     const modTexto = moderatorName || t('din.elModerador');
 
     const botonVolverMeet = (
@@ -1842,13 +1856,18 @@ export default function DinamicaScreen() {
               </>
             )}
             {gpsError ? <Text style={styles.codeErrorText}>{gpsError}</Text> : null}
+            {!yaEsLaHora && (
+              <Text style={styles.virtualNota}>{t('din.entrasALaHora', { hora: horaEntrada, falta: countdownDisplay })}</Text>
+            )}
             <TouchableOpacity
-              style={[styles.comenzarButton, abriendoMeet && styles.buttonDisabled]}
+              style={[styles.comenzarButton, (abriendoMeet || !yaEsLaHora) && styles.buttonDisabled]}
               onPress={handleIrAMeet}
-              disabled={abriendoMeet}
+              disabled={abriendoMeet || !yaEsLaHora}
               activeOpacity={0.85}
             >
-              <Text style={styles.comenzarButtonText}>{abriendoMeet ? t('din.abriendo') : 'Ir a Meet'}</Text>
+              <Text style={styles.comenzarButtonText}>
+                {abriendoMeet ? t('din.abriendo') : yaEsLaHora ? 'Ir a Meet' : t('detalle.disponibleALas', { hora: horaEntrada })}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </LinearGradient>
