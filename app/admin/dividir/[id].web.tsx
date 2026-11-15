@@ -28,6 +28,7 @@ import {
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import CoronaPremium from '@/components/admin/CoronaPremium';
 
 // ── tipos ───────────────────────────────────────────────────────────────────
 
@@ -649,7 +650,7 @@ export default function DividirEventoScreen() {
                             style={[st.persona, elegido === p.user_id && st.personaSel]}
                             onPress={() => tocarPersona(p, gi)}
                           >
-                            <Text style={st.pNombre} numberOfLines={1}>{p.nombre}</Text>
+                            <Text style={st.pNombre} numberOfLines={1}>{p.nombre}<CoronaPremium userId={p.user_id} size={12} /></Text>
                             <Text style={st.pDato}>{p.ciudad}{typeof p.edad === 'number' ? ` · ${p.edad}` : ''}</Text>
                           </TouchableOpacity>
                         ))}

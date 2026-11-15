@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import CoronaPremium from '@/components/admin/CoronaPremium';
 
 interface StrikeDetail {
   id: string;
@@ -179,7 +180,7 @@ export default function NoShowsScreen() {
     return (
       <View key={u.user_id} style={styles.card}>
         <View style={styles.cardTop}>
-          <Text style={styles.cardName} numberOfLines={2}>{u.name || '(sin nombre)'}</Text>
+          <Text style={styles.cardName} numberOfLines={2}>{u.name || '(sin nombre)'}<CoronaPremium userId={u.user_id} /></Text>
           {renderBadge(u)}
         </View>
 
@@ -228,7 +229,7 @@ export default function NoShowsScreen() {
     return (
       <View key={u.user_id}>
         <View style={styles.tr}>
-          <Text style={[styles.td, { flex: 2, fontWeight: '700' }]}>{u.name || '(sin nombre)'}</Text>
+          <Text style={[styles.td, { flex: 2, fontWeight: '700' }]}>{u.name || '(sin nombre)'}<CoronaPremium userId={u.user_id} /></Text>
           <View style={{ flex: 2 }}>
             <Text style={styles.td}>{u.email || '—'}</Text>
             <Text style={[styles.td, { color: '#9CA3AF', fontSize: 11 }]}>{u.phone || ''}</Text>

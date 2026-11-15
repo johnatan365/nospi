@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { LinearGradient } from 'expo-linear-gradient';
 import { nospiColors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import CoronaPremium from '@/components/admin/CoronaPremium';
+import { recargarSuscriptoresActivos } from '@/lib/suscriptoresActivos';
 import { Stack, useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
 import { formatTimeAmPm } from '@/utils/formatTime';
@@ -4853,6 +4855,9 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const loadSubscriptions = async (force?: boolean) => {
+    // Las coronas premium de todo el panel salen de la misma fuente: si alguien
+    // mira Suscripciones es buen momento para traerlas frescas.
+    recargarSuscriptoresActivos(!!force);
     if (subscriptionsLoaded && !force) return;
     setSubscriptionsLoading(true);
     try {
@@ -6686,7 +6691,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
               return (
                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '1px solid #F3F4F6', flexWrap: 'wrap', gap: 10 }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937' }}>{a.users?.name}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937' }}>{a.users?.name}<CoronaPremium userId={a.user_id} /></div>
                     <div style={{ fontSize: 12, color: '#6B7280' }}>{a.users?.phone} · {a.events?.name} · {a.events?.date}</div>
                     <div style={{ fontSize: 11, color: '#9CA3AF' }}>Estado de pago: {a.payment_status} · Inscrito: {new Date(a.created_at).toLocaleDateString('es-CO')}</div>
                   </div>
@@ -7410,7 +7415,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
           <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#F0F0F2', paddingTop: 7 }}>
             {(voters || []).map((v: any) => (
               <View key={v.user_id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, color: '#1f2937' }}>{v.name}</Text>
+                <Text style={{ fontSize: 11, color: '#1f2937' }}>{v.name}<CoronaPremium userId={v.user_id} /></Text>
                 <Text style={{ fontSize: 11, color: '#6b7280' }}>
                   {isRating ? `${'★'.repeat(v.rating || 0)}` : (r.options || [])[v.option_index]}
                 </Text>
@@ -8260,7 +8265,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     return (
                       <tr key={`${r.event_id}-${r.user_id}-${i}`}>
                         <td style={{ padding: '9px 10px', borderBottom: '1px solid #E5E7EB', verticalAlign: 'top' }}>
-                          <Text style={{ fontWeight: '700', fontSize: 13 }}>{r.user_name}</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13 }}>{r.user_name}<CoronaPremium userId={r.user_id} /></Text>
                           {feedbackEventFilter === 'all' && (
                             <Text style={{ fontSize: 11, color: '#6b7280' }}>{r.event_name}</Text>
                           )}
@@ -10010,6 +10015,7 @@ setBulkWhatsAppPending(pending);
           if (!apt.user_id || apt.status === 'cancelada') return;
           if (!byUser[apt.user_id]) {
             byUser[apt.user_id] = {
+              user_id: apt.user_id,
               user: { name: apt.user_name, email: apt.user_email, phone: apt.user_phone },
               eventsMap: new Map(),
             };
@@ -10018,6 +10024,7 @@ setBulkWhatsAppPending(pending);
         });
         const result = Object.values(byUser)
         .map((u: any) => ({
+          user_id: u.user_id,
           name: u.user.name,
           email: u.user.email,
           phone: u.user.phone,
@@ -10115,7 +10122,7 @@ setBulkWhatsAppPending(pending);
           <tbody>
             {recurringCustomers.map((c: any, idx: number) => (
             <tr key={idx} style={{ borderBottom: '1px solid #EDE9FE' }}>
-            <td style={{ padding: '8px 10px', fontWeight: '600' }}>{c.name}</td>
+            <td style={{ padding: '8px 10px', fontWeight: '600' }}>{c.name}<CoronaPremium userId={c.user_id} /></td>
             <td style={{ padding: '8px 10px', color: '#6B7280' }}>{c.email}<br />{c.phone}</td>
             <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700' }}>{c.totalEventos}</td>
             <td style={{ padding: '8px 10px' }}>
@@ -10214,7 +10221,7 @@ setBulkWhatsAppPending(pending);
                 return (
                   <tr key={user.id} style={row}>
                     <td style={{ ...cellStyle, color: '#9CA3AF', textAlign: 'center', width: 40 }}>{pageOffset + i + 1}</td>
-                    <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{user.name}</td>
+                    <td style={{ ...cellStyle, fontWeight: 600, color: '#6B21A8' }}>{user.name}<CoronaPremium userId={user.id} /></td>
                     <td style={{ ...cellStyle, textAlign: 'center', color: '#6B7280', whiteSpace: 'nowrap' }}>{createdAt}</td>
                     <td style={cellStyle}>{user.email}</td>
                     <td style={cellStyle}>{user.phone}</td>
@@ -10856,7 +10863,7 @@ setBulkWhatsAppPending(pending);
                         <>
                           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                             <Text style={{ fontSize: 14, color: '#1f2937' }}>
-                              Modera <Text style={{ fontWeight: '800' }}>{turnoAbierto.nombre}</Text>
+                              Modera <Text style={{ fontWeight: '800' }}>{turnoAbierto.nombre}<CoronaPremium userId={turnoAbierto.user_id} /></Text>
                             </Text>
                             {roto && (
                               <Text style={{
@@ -10880,7 +10887,7 @@ setBulkWhatsAppPending(pending);
                               Antes: {turnosCerrados.slice(0, 3).map((t, i) => (
                                 <Text key={`${t.user_id}-${t.desde}`}>
                                   {i > 0 ? ' · ' : ''}
-                                  <Text style={{ fontWeight: '700', color: '#78350F' }}>{t.nombre}</Text>
+                                  <Text style={{ fontWeight: '700', color: '#78350F' }}>{t.nombre}<CoronaPremium userId={t.user_id} /></Text>
                                   {` ${hhmm(t.desde)}–${hhmm(t.hasta as string)}`}
                                 </Text>
                               ))}
@@ -11166,7 +11173,7 @@ setBulkWhatsAppPending(pending);
               <View key={a.id || a.user_id} style={styles.participantItem}>
                 <View style={styles.participantHeader}>
                   <Text style={styles.participantNumber}>#{idx + 1}</Text>
-                  <Text style={styles.participantName}>{a.user_name || 'Usuario'}</Text>
+                  <Text style={styles.participantName}>{a.user_name || 'Usuario'}<CoronaPremium userId={a.user_id} /></Text>
                   <View style={[styles.statusBadge, { backgroundColor: colorSello }]}>
                     <Text style={styles.statusBadgeText}>{sello}</Text>
                   </View>
@@ -12219,7 +12226,7 @@ setBulkWhatsAppPending(pending);
           {(bulkWhatsAppPending || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>✅ Ya se le envió a todos.</Text>}
           {(bulkWhatsAppPending || []).map(a => (
           <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
-            <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
+            <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}<CoronaPremium userId={a.user_id} /></Text>
             <a href={buildWhatsAppLink(a.users.phone, a.users.name, nombreLargoEvento(a.events), a.events?.date, a.events?.time, (a.events as any)?.type)} target="_blank" rel="noopener noreferrer" onClick={() => { markPurchaseWhatsAppSent(a.id); setBulkWhatsAppPending(prev => (prev || []).filter(x => x.id !== a.id)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
@@ -12247,7 +12254,7 @@ setBulkWhatsAppPending(pending);
           {(bulkDeclinedPending || []).length === 0 && <Text style={{ padding: 20, color: '#6B7280' }}>✅ Ya se le envió a todos.</Text>}
           {(bulkDeclinedPending || []).map((p: any) => (
           <View key={`${p.user_id}_${p.event_id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
-            <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}</Text>
+            <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{p.user_name}<CoronaPremium userId={p.user_id} /></Text>
             <a href={buildDeclinedPaymentWhatsAppLink(p.user_phone, p.user_name, p.event_name, p.event_date, p.event_time)} target="_blank" rel="noopener noreferrer" onClick={() => { markDeclinedWhatsAppSent(p.user_id, p.event_id); setBulkDeclinedPending(prev => (prev || []).filter(x => !(x.user_id === p.user_id && x.event_id === p.event_id))); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#25D366', color: 'white', textDecoration: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>💬 Enviar</a>
           </View>))}
         </ScrollView>
@@ -12280,7 +12287,7 @@ setBulkWhatsAppPending(pending);
           const alreadySent = !!sentAtValue;
           return (
           <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 }}>
-          <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}</Text>
+          <Text style={{ fontSize: 14, color: '#111827', flex: 1 }}>{a.users?.name}<CoronaPremium userId={a.user_id} /></Text>
           <a href={buildReminderLinkForModal(a)} target="_blank" rel="noopener noreferrer" onClick={() => {
             const sentAt = new Date().toISOString();
             setAppointments(prev => prev.map(x => x.id === a.id ? { ...x, [field]: sentAt } : x));
@@ -12366,7 +12373,7 @@ setBulkWhatsAppPending(pending);
                   <View key={c.id} style={[styles.attendeeItem, { borderLeftWidth: 3, borderLeftColor: '#EF4444' }]}>
                     <View style={styles.attendeeHeader}>
                       <Text style={styles.attendeeNumber}>#{i + 1}</Text>
-                      <Text style={styles.attendeeName}>{c.users.name}</Text>
+                      <Text style={styles.attendeeName}>{c.users.name}<CoronaPremium userId={c.user_id} /></Text>
                     </View>
                     <Text style={styles.attendeeDetail}>
                       👤 {c.users.gender === 'hombre' ? 'Hombre' : c.users.gender === 'mujer' ? 'Mujer' : 'No especificado'}
@@ -12477,7 +12484,7 @@ setBulkWhatsAppPending(pending);
                     >
                       <View style={styles.attendeeHeader}>
                         <Text style={styles.attendeeNumber}>#{index + 1}</Text>
-                        <Text style={styles.attendeeName}>{attendee.users.name}</Text>
+                        <Text style={styles.attendeeName}>{attendee.users.name}<CoronaPremium userId={attendee.user_id} /></Text>
                         <TouchableOpacity
                           style={styles.sacarConSaldoButton}
                           onPress={() => handleSacarAsistente(attendee.id, attendee.users.name, 'saldo')}
@@ -13374,7 +13381,7 @@ setBulkWhatsAppPending(pending);
               <View style={styles.moveAttendeeModalBody}>
                 <View style={styles.attendeeInfoSection}>
                   <Text style={styles.attendeeInfoTitle}>Asistente:</Text>
-                  <Text style={styles.attendeeInfoName}>{selectedAttendeeToMove.users.name}</Text>
+                  <Text style={styles.attendeeInfoName}>{selectedAttendeeToMove.users.name}<CoronaPremium userId={selectedAttendeeToMove.user_id} /></Text>
                   <Text style={styles.attendeeInfoDetail}>📧 {selectedAttendeeToMove.users.email}</Text>
                 </View>
 
@@ -13777,7 +13784,7 @@ setBulkWhatsAppPending(pending);
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#6B21A8' }}>{u.name}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#6B21A8' }}>{u.name}<CoronaPremium userId={u.id} /></Text>
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>{u.email}{u.phone ? ` · ${u.phone}` : ''}</Text>
                       <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
                         {u.created_at ? `Registrado ${new Date(u.created_at).toLocaleDateString('es-CO')}` : 'Sin fecha de registro'}
