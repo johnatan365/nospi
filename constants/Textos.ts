@@ -69,10 +69,6 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'eventos.masAdelante': 'Más adelante',
     'eventos.sinFecha': 'Fecha sin definir',
     'eventos.cambiarCiudad': '¿No es tu ciudad? Cámbiala en tu perfil',
-    'eventos.tuCiudad': 'Tu ciudad',
-    'eventos.todasLasCiudadesCorto': 'Todas las ciudades',
-    'eventos.cambiar': 'Cambiar',
-    'eventos.elegir': 'Elegir',
     'eventos.elegirCiudad': 'Elige tu ciudad en tu perfil',
     'eventos.ubicacionUnDiaAntes': 'Ubicación se revelará un día antes',
 
@@ -1315,10 +1311,6 @@ export const TEXTOS: Record<Idioma, Record<string, string>> = {
     'eventos.masAdelante': 'Later on',
     'eventos.sinFecha': 'Date to be confirmed',
     'eventos.cambiarCiudad': 'Not your city? Change it in your profile',
-    'eventos.tuCiudad': 'Your city',
-    'eventos.todasLasCiudadesCorto': 'All cities',
-    'eventos.cambiar': 'Change',
-    'eventos.elegir': 'Choose',
     'eventos.elegirCiudad': 'Pick your city in your profile',
     'eventos.ubicacionUnDiaAntes': 'Location revealed the day before',
 

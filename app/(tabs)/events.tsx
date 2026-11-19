@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { nospiColors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -294,31 +293,20 @@ export default function EventsScreen() {
           {/* La ciudad se muestra siempre, aunque no haya nada que mostrar: si
               alguien se equivoco de ciudad al registrarse, aqui entiende por
               que no ve planes, en vez de creer que la app esta vacia. */}
-          {/* Toda la tarjeta lleva al perfil, que es donde se cambia la
-              ciudad (ver el comentario de ciudadPerfil: aqui no se escoge). */}
-          <TouchableOpacity
-            style={styles.cityBanner}
-            onPress={() => router.push('/(tabs)/profile')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={ciudadPerfil ? t('eventos.cambiarCiudad') : t('eventos.elegirCiudad')}
-          >
-            <View style={styles.cityIcono}>
-              <Ionicons name="location-sharp" size={20} color="#880E4F" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.cityEtiqueta}>{t('eventos.tuCiudad')}</Text>
-              <Text style={styles.cityNombre} numberOfLines={1}>
-                {ciudadPerfil || t('eventos.todasLasCiudadesCorto')}
+          <View style={styles.cityBanner}>
+            <Text style={styles.cityBannerText} numberOfLines={1}>
+              📍 {ciudadPerfil ? t('eventos.enCiudad', { ciudad: ciudadPerfil }) : t('eventos.todasLasCiudades')}
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile')}
+              activeOpacity={0.7}
+              accessibilityLabel={t('eventos.cambiarCiudad')}
+            >
+              <Text style={styles.cityBannerLink}>
+                {ciudadPerfil ? t('eventos.cambiarCiudad') : t('eventos.elegirCiudad')}
               </Text>
-            </View>
-            <View style={styles.cityBoton}>
-              <Text style={styles.cityBotonTexto}>
-                {ciudadPerfil ? t('eventos.cambiar') : t('eventos.elegir')}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
           {WEEK_SECTION_ORDER.map((section) => {
             const sectionEvents = groupedEvents[section];
@@ -626,52 +614,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   cityBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    borderRadius: 18,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    borderRadius: 16,
     paddingVertical: 12,
-    paddingLeft: 12,
-    paddingRight: 12,
+    paddingHorizontal: 16,
     marginBottom: 20,
   },
-  cityIcono: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cityEtiqueta: {
-    fontSize: 11,
+  cityBannerText: {
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  cityNombre: {
-    fontSize: 18,
-    fontWeight: '800',
     color: '#FFFFFF',
-    marginTop: 1,
   },
-  cityBoton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderRadius: 999,
-    paddingVertical: 7,
-    paddingLeft: 12,
-    paddingRight: 8,
-  },
-  cityBotonTexto: {
+  cityBannerLink: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    color: 'rgba(255, 255, 255, 0.78)',
+    marginTop: 4,
+    textDecorationLine: 'underline',
   },
 });
