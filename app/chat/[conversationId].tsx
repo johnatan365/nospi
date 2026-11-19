@@ -1912,7 +1912,12 @@ export default function ChatThreadScreen() {
   // no. Se busca con includes y no con startsWith (como si hacen las menciones
   // con "@") porque aca la gente tambien busca por el apellido.
   const asistentesFiltrados = (() => {
-    const base = participants.filter((p) => p.user_id !== user?.id);
+    // La cuenta de Nospi no sale en la lista: no es un asistente y su chat
+    // privado no recibe mensajes (ver NOSPI_CUENTA_ID). Ojo: aqui no se puede
+    // usar isAdminUser, que se declara mas abajo y romperia en tiempo de
+    // ejecucion; para el admin da igual porque su propia cuenta ya se excluye.
+    const base = participants.filter((p) => p.user_id !== user?.id
+      && p.user_id !== NOSPI_CUENTA_ID && p.user_id !== NOSPI_SYSTEM_USER_ID);
     const q = normalizeText(buscaAsistente);
     if (!q) return base;
     return base.filter((p) => normalizeText(p.name).includes(q));
@@ -6084,7 +6089,8 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
           en_linea: miPrivacidad.enLinea && enLinea.includes(perfilVisto.user_id),
         }}
         onClose={() => setPerfilVisto(null)}
-        pie={perfilVisto && perfilVisto.user_id !== user?.id ? (
+        // La ficha de Nospi no ofrece escribirle por privado: ver NOSPI_CUENTA_ID.
+        pie={perfilVisto && perfilVisto.user_id !== user?.id && perfilVisto.user_id !== NOSPI_CUENTA_ID ? (
           <>
             {/* Esto hay que decirlo ANTES de tocar el boton: si no, la persona
                 cree que mando un mensaje normal y no entiende por que no la
