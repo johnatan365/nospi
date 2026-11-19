@@ -1543,6 +1543,18 @@ export default function ChatThreadScreen() {
   // Alto real del menu de acciones, medido al pintarse. Sirve para saber si
   // cabe junto al mensaje o si hay que centrarlo en la pantalla.
   const [alturaMenuAcciones, setAlturaMenuAcciones] = useState(0);
+  // Espacio libre arriba y abajo del mensaje presionado, descontando la barra
+  // de estado y la franja inferior del telefono, y el alto que pide el menu.
+  const espacioMenuAcciones = (a: { y: number; height: number }) => {
+    const margen = 8;
+    const topeArriba = insets.top + margen;
+    const topeAbajo = SCREEN_H - insets.bottom - margen;
+    return {
+      abajo: topeAbajo - (a.y + a.height + margen),
+      arriba: (a.y - margen) - topeArriba,
+      necesita: Math.min(alturaMenuAcciones || 260, SCREEN_H - insets.top - insets.bottom - 2 * margen),
+    };
+  };
   const bubbleRefs = useRef<Record<string, any>>({});
 
   // Reacciones con emoji por mensaje. Se guardan en chat_message_reactions
@@ -5727,23 +5739,27 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
                 // antes el menu se forzaba a 200 px pegado al borde del
                 // mensaje y quedaba fuera de la pantalla, arriba, sin poder
                 // tocarse. En ese caso ahora se centra en la pantalla.
+                //
+                // El espacio se cuenta SIN la barra de estado ni la franja de
+                // abajo (insets): en iPhone el menu "cabia" arriba contando
+                // los 59 pt de la hora y la isla, se abria ahi y quedaba
+                // tapado por la hora. En la web no se ve porque no hay barra.
                 const margen = 8;
-                const abajo = SCREEN_H - (actionAnchor.y + actionAnchor.height) - margen;
-                const arriba = actionAnchor.y - margen;
-                const necesita = Math.min(alturaMenuAcciones || 260, SCREEN_H - 120);
+                const { abajo, arriba, necesita } = espacioMenuAcciones(actionAnchor);
                 if (abajo >= necesita || arriba >= necesita) {
                   return abajo >= arriba
-                    ? { top: actionAnchor.y + actionAnchor.height + margen, maxHeight: abajo - 16 }
-                    : { bottom: SCREEN_H - actionAnchor.y + margen, maxHeight: arriba - 16 };
+                    ? { top: actionAnchor.y + actionAnchor.height + margen, maxHeight: abajo - 8 }
+                    : { bottom: SCREEN_H - actionAnchor.y + margen, maxHeight: arriba - 8 };
                 }
-                return { top: Math.max(60, (SCREEN_H - necesita) / 2), maxHeight: SCREEN_H - 120 };
+                return {
+                  top: Math.max(insets.top + margen, (SCREEN_H - necesita) / 2),
+                  maxHeight: SCREEN_H - insets.top - insets.bottom - 2 * margen,
+                };
               })(),
               (() => {
                 if (!actionAnchor) return { left: 12, alignItems: 'flex-start' as const };
-                const margen = 8;
-                const necesita = Math.min(alturaMenuAcciones || 260, SCREEN_H - 120);
-                const cabe = SCREEN_H - (actionAnchor.y + actionAnchor.height) - margen >= necesita
-                  || actionAnchor.y - margen >= necesita;
+                const { abajo, arriba, necesita } = espacioMenuAcciones(actionAnchor);
+                const cabe = abajo >= necesita || arriba >= necesita;
                 // Centrado: el contenedor ocupa todo el ancho y el menu queda en medio.
                 if (!cabe) return { left: 0, right: 0, alignItems: 'center' as const, maxWidth: 10000 };
                 return actionAnchor.isMine ? { right: 12, alignItems: 'flex-end' as const } : { left: 12, alignItems: 'flex-start' as const };
