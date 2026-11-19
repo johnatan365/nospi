@@ -426,6 +426,13 @@ const PLANTILLA_VIRTUAL_VISPERA_DEFECTO = [
 
 // Un comodin que no exista se deja tal cual: es preferible ver "{hroa}" y
 // notar el error de dedo, a que salga un hueco silencioso en el mensaje.
+// Texto de partida para un evento de rooftop. Se pone en el formulario al
+// escoger la categoria, y se puede editar antes de guardar.
+const DESCRIPCION_BASE_ROOFTOP =
+  'Una noche en un rooftop con vista a la ciudad, buena música y gente nueva por conocer. ' +
+  'Llegas, te sientas en la mesa de Nospi y la dinámica rompe el hielo por ti: preguntas para ' +
+  'conversar, reírse y conocerse sin presión. Después la noche sigue con la ciudad iluminada de fondo.';
+
 function aplicarComodines(plantilla: string, datos: Record<string, string>): string {
   return (plantilla || '').replace(/\{(\w+)\}/g, (m, k) => (k in datos ? datos[k] : m));
 }
@@ -1068,7 +1075,7 @@ export default function AdminPanelScreen() {
   // --y con el, una consulta de hasta 2000 filas en cada carga del panel--,
   // porque ocupaba la parte de arriba de la pestaña todos los dias para un dato
   // que se consulta de vez en cuando. Se pide cuando haga falta.
-  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'baile' | 'karaoke' | 'virtual'>('all');
+  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'restaurante' | 'cafe' | 'caminata' | 'bolos' | 'bar' | 'baile' | 'karaoke' | 'rooftop' | 'virtual'>('all');
   const [eventSearch, setEventSearch] = useState('');
   // Orden de la lista de eventos. Por defecto la pestaña "Publicados" arranca en
   // ascendente (los más próximos a venir primero); las demás pestañas en
@@ -7774,7 +7781,7 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
             ) : groupChats.map(g => {
               const on = g.conversation_id === activeGroupChatId;
               const emoji = g.event_type === 'virtual' ? '🎥' : g.event_type === 'bar' ? '🍸' : g.event_type === 'caminata' ? '🚶'
-                : g.event_type === 'cafe' ? '☕' : g.event_type === 'bolos' ? '🎳' : g.event_type === 'baile' ? '💃' : g.event_type === 'karaoke' ? '🎤' : '🍽️';
+                : g.event_type === 'cafe' ? '☕' : g.event_type === 'bolos' ? '🎳' : g.event_type === 'baile' ? '💃' : g.event_type === 'karaoke' ? '🎤' : g.event_type === 'rooftop' ? '🌃' : '🍽️';
               return (
                 <TouchableOpacity
                   key={g.conversation_id}
@@ -9652,7 +9659,7 @@ setBulkWhatsAppPending(pending);
             <option value="bolos">Bolos</option>
             <option value="bar">Bar</option>
             <option value="baile">Baile</option>
-            <option value="karaoke">Karaoke</option>
+            <option value="karaoke">Karaoke</option><option value="rooftop">Rooftop</option>
           </select>
           <button
             onClick={() => setEventSortDesc((v) => !v)}
@@ -9665,7 +9672,7 @@ setBulkWhatsAppPending(pending);
         </div>
 
         {filteredEvents.map((event) => {
-          const eventTypeText = event.type === 'baile' ? 'Baile' : event.type === 'karaoke' ? 'Karaoke' : event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
+          const eventTypeText = event.type === 'baile' ? 'Baile' : event.type === 'karaoke' ? 'Karaoke' : event.type === 'rooftop' ? 'Rooftop' : event.type === 'bar' ? 'Bar' : event.type === 'caminata' ? 'Caminata' : event.type === 'cafe' ? 'Café' : event.type === 'bolos' ? 'Bolos' : event.type === 'virtual' ? 'Videollamada' : 'Restaurante';
           const statusText = event.event_status === 'published' ? 'Publicado' : event.event_status === 'draft' ? 'Borrador' : 'Cerrado';
           const statusColor = event.event_status === 'published' ? '#10B981' : event.event_status === 'draft' ? '#F59E0B' : '#EF4444';
           
@@ -12921,11 +12928,20 @@ setBulkWhatsAppPending(pending);
                   width: '100%',
                 }}
                 value={eventForm.type}
-                onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
+                onChange={(e) => {
+                  const type = e.target.value;
+                  // Rooftop trae una descripcion general de base, solo si el
+                  // campo esta vacio: nunca pisa lo que ya se escribio. Un
+                  // evento especial (la Alborada) lleva la suya propia.
+                  const description = type === 'rooftop' && !eventForm.description.trim()
+                    ? DESCRIPCION_BASE_ROOFTOP
+                    : eventForm.description;
+                  setEventForm({ ...eventForm, type, description });
+                }}
               >
                 <option value="bar">Bar</option>
                 <option value="baile">Baile</option>
-                <option value="karaoke">Karaoke</option>
+                <option value="karaoke">Karaoke</option><option value="rooftop">Rooftop</option>
                 {/* Decia value="restaurant" (sin la e). Ese valor no pasa la
                     restriccion de events.type en la base, asi que guardar un
                     evento elegido por aqui como Restaurante fallaba. */}

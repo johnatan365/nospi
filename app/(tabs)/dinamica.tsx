@@ -2232,8 +2232,8 @@ export default function DinamicaScreen() {
     );
   }
 
-  const eventTypeText = t(['bar', 'baile', 'karaoke', 'caminata', 'cafe', 'bolos', 'virtual'].includes(appointment.event.type) ? `evento.tipo.${appointment.event.type}` : 'evento.tipo.restaurante');
-  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : appointment.event.type === 'baile' ? '💃' : appointment.event.type === 'karaoke' ? '🎤' : '🍽️';
+  const eventTypeText = t(['bar', 'baile', 'karaoke', 'rooftop', 'caminata', 'cafe', 'bolos', 'virtual'].includes(appointment.event.type) ? `evento.tipo.${appointment.event.type}` : 'evento.tipo.restaurante');
+  const eventIcon = appointment.event.type === 'bar' ? '🍸' : appointment.event.type === 'caminata' ? '🚶' : appointment.event.type === 'cafe' ? '☕' : appointment.event.type === 'bolos' ? '🎳' : appointment.event.type === 'virtual' ? '🎥' : appointment.event.type === 'baile' ? '💃' : appointment.event.type === 'karaoke' ? '🎤' : appointment.event.type === 'rooftop' ? '🌃' : '🍽️';
 
   const locationRevealed = appointment.event.is_location_revealed || false;
   const shouldShowLocationText = !locationRevealed;
@@ -2283,6 +2283,10 @@ export default function DinamicaScreen() {
               ) : appointment.event.type === 'karaoke' ? (
                 <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
                   <Image source={require('@/assets/images/icon-karaoke.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
+                </View>
+              ) : appointment.event.type === 'rooftop' ? (
+                <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
+                  <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
                 </View>
             ) : appointment.event.type === 'bar' ? (
               <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>

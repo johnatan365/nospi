@@ -336,7 +336,7 @@ interface ConversationMeta {
 }
 
 function eventEmoji(eventType: string | null | undefined): string {
-  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : eventType === 'karaoke' ? '🎤' : '🍽️';
+  return eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : eventType === 'karaoke' ? '🎤' : eventType === 'rooftop' ? '🌃' : '🍽️';
 }
 
 // Mismos íconos PNG que usa la pestaña de Eventos. El require debe ser estático
@@ -347,6 +347,7 @@ function eventIconSource(eventType: string | null | undefined) {
     case 'bar': return require('@/assets/images/icon-bar.png');
     case 'baile': return require('@/assets/images/icon-baile.png');
     case 'karaoke': return require('@/assets/images/icon-karaoke.png');
+    case 'rooftop': return require('@/assets/images/icon-rooftop.png');
     case 'cafe': return require('@/assets/images/icon-cafe.png');
     case 'bolos': return require('@/assets/images/icon-bolos.png');
     case 'virtual': return require('@/assets/images/icon-videollamada.png');
