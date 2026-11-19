@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, Alert, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { nospiColors } from '@/constants/Colors';
@@ -10,7 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SkeletonBox } from '@/components/SkeletonBox';
 import { getCached, setCached } from '@/utils/cache';
 import { formatTimeAmPm } from '@/utils/formatTime';
-import { eventoSeVeEn, textoCiudadesEvento } from '@/constants/Ciudades';
+import { eventoSeVeEn, textoCiudadesEvento, NOMBRES_CIUDADES_COLOMBIA } from '@/constants/Ciudades';
 import { useIdioma } from '@/contexts/IdiomaContext';
 import { renglonesEvento } from '@/utils/nombreEvento';
 
@@ -136,7 +136,16 @@ export default function EventsScreen() {
   // esta pantalla, alguien de otra ciudad entraria sin darse cuenta a una sala
   // que no le corresponde. Para cambiarla hay que ir al perfil, que es una
   // decision consciente.
+  //
+  // Actualizacion 19 de noviembre de 2026: mandar al perfil hacia que la gente
+  // se perdiera buscando donde estaba la ciudad. Ahora "Cambiar" abre aqui
+  // mismo la lista de ciudades, pero sigue siendo la ciudad DEL PERFIL (se
+  // guarda en users.city, no es un filtro de esta pantalla) y pide confirmar
+  // antes de guardar, para que siga siendo una decision consciente.
   const [ciudadPerfil, setCiudadPerfil] = useState('');
+  const [paisPerfil, setPaisPerfil] = useState('');
+  const [mostrarCiudades, setMostrarCiudades] = useState(false);
+  const [guardandoCiudad, setGuardandoCiudad] = useState(false);
 
   const fetchFresh = useCallback(async (): Promise<Event[] | null> => {
     if (!user?.id) return null;
@@ -167,7 +176,7 @@ export default function EventsScreen() {
         .order('date', { ascending: true }),
       supabase
         .from('users')
-        .select('gender, city')
+        .select('gender, city, country')
         .eq('id', user.id)
         .maybeSingle(),
     ]);
@@ -188,6 +197,7 @@ export default function EventsScreen() {
     // listado para ese género, sin mensajes ni botones bloqueados.
     const userGender = userResult.data?.gender || '';
     setCiudadPerfil(userResult.data?.city || '');
+    setPaisPerfil((userResult.data as any)?.country || '');
     const purchasedEventIds = appointmentsResult.data?.map(apt => apt.event_id) || [];
     const availableEvents = (eventsResult.data || []).filter(event => {
       if (purchasedEventIds.includes(event.id) || event.is_full) return false;
@@ -270,6 +280,41 @@ export default function EventsScreen() {
     return events.filter((e) => eventoSeVeEn(e, ciudadPerfil));
   }, [events, ciudadPerfil]);
 
+  // Las ciudades de Colombia son las mismas del registro y del perfil. Fuera de
+  // Colombia (casi nadie) se sigue mandando al perfil, donde esta el pais.
+  const abrirCambioCiudad = useCallback(() => {
+    if (paisPerfil && paisPerfil !== 'Colombia') { router.push('/(tabs)/profile'); return; }
+    setMostrarCiudades(true);
+  }, [paisPerfil, router]);
+
+  const guardarCiudad = useCallback(async (ciudad: string) => {
+    if (!user?.id || ciudad === ciudadPerfil) { setMostrarCiudades(false); return; }
+    setGuardandoCiudad(true);
+    const { error } = await supabase.from('users').update({ city: ciudad }).eq('id', user.id);
+    setGuardandoCiudad(false);
+    if (error) {
+      const msg = t('eventos.noSeCambioCiudad');
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert(t('comun.error'), msg);
+      return;
+    }
+    setCiudadPerfil(ciudad);
+    setMostrarCiudades(false);
+  }, [user?.id, ciudadPerfil, t]);
+
+  const elegirCiudad = useCallback((ciudad: string) => {
+    if (ciudad === ciudadPerfil) { setMostrarCiudades(false); return; }
+    const titulo = t('eventos.confirmarCiudadTitulo', { ciudad });
+    const texto = t('eventos.confirmarCiudadTexto', { ciudad });
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${titulo}\n\n${texto}`)) guardarCiudad(ciudad);
+      return;
+    }
+    Alert.alert(titulo, texto, [
+      { text: t('comun.cancelar'), style: 'cancel' },
+      { text: t('eventos.cambiar'), onPress: () => guardarCiudad(ciudad) },
+    ]);
+  }, [ciudadPerfil, guardarCiudad, t]);
+
   const groupedEvents: Record<string, Event[]> = {};
   eventosVisibles.forEach(event => {
     const section = getWeekSection(event.date);
@@ -298,7 +343,7 @@ export default function EventsScreen() {
               ciudad (ver el comentario de ciudadPerfil: aqui no se escoge). */}
           <TouchableOpacity
             style={styles.cityBanner}
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={abrirCambioCiudad}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={ciudadPerfil ? t('eventos.cambiarCiudad') : t('eventos.elegirCiudad')}
@@ -468,6 +513,41 @@ export default function EventsScreen() {
           )}
         </ScrollView>
       )}
+      {/* Lista de ciudades para "Cambiar". Ver el comentario de ciudadPerfil. */}
+      <Modal visible={mostrarCiudades} transparent animationType="slide" onRequestClose={() => setMostrarCiudades(false)}>
+        <TouchableOpacity style={styles.ciudadesFondo} activeOpacity={1} onPress={() => !guardandoCiudad && setMostrarCiudades(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.ciudadesHoja}>
+            <View style={styles.ciudadesCabecera}>
+              <Text style={styles.ciudadesTitulo}>{t('eventos.tuCiudad')}</Text>
+              {guardandoCiudad ? (
+                <ActivityIndicator size="small" color="#880E4F" />
+              ) : (
+                <TouchableOpacity onPress={() => setMostrarCiudades(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={styles.ciudadesCerrar}>{t('comun.cancelar')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.ciudadesAyuda}>{t('eventos.ciudadAyuda')}</Text>
+            <ScrollView style={{ maxHeight: 420 }}>
+              {NOMBRES_CIUDADES_COLOMBIA.map((ciudad) => {
+                const actual = ciudad === ciudadPerfil;
+                return (
+                  <TouchableOpacity
+                    key={ciudad}
+                    style={[styles.ciudadFila, actual && styles.ciudadFilaActual]}
+                    onPress={() => elegirCiudad(ciudad)}
+                    disabled={guardandoCiudad}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.ciudadTexto, actual && styles.ciudadTextoActual]}>{ciudad}</Text>
+                    {actual && <Ionicons name="checkmark" size={18} color="#880E4F" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -673,5 +753,58 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  ciudadesFondo: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  ciudadesHoja: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingBottom: 30,
+  },
+  ciudadesCabecera: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ciudadesTitulo: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1f2937',
+  },
+  ciudadesCerrar: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#880E4F',
+  },
+  ciudadesAyuda: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  ciudadFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  ciudadFilaActual: {
+    backgroundColor: '#FCE4EC',
+  },
+  ciudadTexto: {
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  ciudadTextoActual: {
+    fontWeight: '800',
+    color: '#880E4F',
   },
 });
