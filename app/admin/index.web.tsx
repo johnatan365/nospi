@@ -1656,18 +1656,25 @@ export default function AdminPanelScreen() {
   // boton de arriba que copiaba la conversacion ENTERA se quito: no se usaba
   // y esto es lo que hacia falta.
   const [menuMensaje, setMenuMensaje] = useState<
-    { id: string; autor: string; content: string; created_at: string; hidden: boolean } | null
+    { id: string; autor: string; content: string; created_at: string; hidden: boolean; sender_id: string | null } | null
   >(null);
   const [ocultando, setOcultando] = useState(false);
+  // Texto del mensaje mientras se edita desde el menu (null = no se esta
+  // editando). Solo los mensajes de Nospi: los de la cuenta con la que se
+  // entro al panel y los de "Equipo Nospi". Lo de los usuarios no se reescribe.
+  const [textoEdicionAdmin, setTextoEdicionAdmin] = useState<string | null>(null);
+  const [guardandoEdicionAdmin, setGuardandoEdicionAdmin] = useState(false);
 
   const abrirMenuMensaje = useCallback(
-    (m: { id: string; content?: string | null; created_at: string; hidden_at?: string | null }, autor: string) => {
+    (m: { id: string; content?: string | null; created_at: string; hidden_at?: string | null; sender_id?: string | null }, autor: string) => {
+      setTextoEdicionAdmin(null);
       setMenuMensaje({
         id: m.id,
         autor,
         content: m.content || '',
         created_at: m.created_at,
         hidden: !!m.hidden_at,
+        sender_id: m.sender_id || null,
       });
     },
     [],
@@ -1966,6 +1973,29 @@ export default function AdminPanelScreen() {
   // Eliminar borra el mensaje para TODOS, incluida la persona que lo escribio
   // — a diferencia de ocultar, donde el autor lo sigue viendo. Por eso pide
   // confirmacion: no hay boton para devolverlo desde el panel.
+  // Editar un mensaje de Nospi, sin limite de tiempo para admins: es la misma
+  // funcion que usa la app (editar_mi_mensaje), que valida que sea propio o de
+  // "Equipo Nospi". Si el canal se traduce, el ingles se rehace solo.
+  const MENSAJE_SISTEMA_ID = '00000000-0000-0000-0000-000000000099';
+  const esMensajeDeNospi = !!menuMensaje && !!menuMensaje.sender_id
+    && (menuMensaje.sender_id === adminUserId || menuMensaje.sender_id === MENSAJE_SISTEMA_ID);
+  const guardarEdicionAdmin = useCallback(async () => {
+    if (!menuMensaje || textoEdicionAdmin === null) return;
+    const nuevo = textoEdicionAdmin.trim();
+    if (!nuevo) { window.alert('El mensaje no puede quedar vacío.'); return; }
+    if (nuevo === (menuMensaje.content || '').trim()) { setTextoEdicionAdmin(null); setMenuMensaje(null); return; }
+    setGuardandoEdicionAdmin(true);
+    const { error } = await supabase.rpc('editar_mi_mensaje', { p_id: menuMensaje.id, p_contenido: nuevo });
+    setGuardandoEdicionAdmin(false);
+    if (error) { window.alert('No se pudo editar: ' + error.message); return; }
+    const cambiar = (arr: any[]) => arr.map((x) => (x.id === menuMensaje.id ? { ...x, content: nuevo, edited_at: new Date().toISOString() } : x));
+    setChannelMessages((prev) => cambiar(prev));
+    setModMessages((prev) => cambiar(prev) as AdminChatMessage[]);
+    setEventChatMessages((prev) => cambiar(prev) as AdminChatMessage[]);
+    setTextoEdicionAdmin(null);
+    setMenuMensaje(null);
+  }, [menuMensaje, textoEdicionAdmin]);
+
   const [eliminando, setEliminando] = useState(false);
   const eliminarMensaje = useCallback(async () => {
     if (!menuMensaje) return;
@@ -12087,13 +12117,43 @@ setBulkWhatsAppPending(pending);
       {/* Menu de un mensaje suelto: sale al hacer clic sobre la burbuja, en
           cualquiera de los chats del panel. Vive en la raiz por lo mismo que
           el de "quien lo vio": se abre desde cuatro pantallas distintas. */}
-        <Modal visible={!!menuMensaje} transparent animationType="fade" onRequestClose={() => setMenuMensaje(null)}>
+        <Modal visible={!!menuMensaje} transparent animationType="fade" onRequestClose={() => { setTextoEdicionAdmin(null); setMenuMensaje(null); }}>
           <TouchableOpacity
             activeOpacity={1}
-            onPress={() => setMenuMensaje(null)}
+            onPress={() => { if (textoEdicionAdmin === null) setMenuMensaje(null); }}
             style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           >
-            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 460, overflow: 'hidden' }}>
+            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: textoEdicionAdmin !== null ? 640 : 460, overflow: 'hidden' }}>
+              {textoEdicionAdmin !== null ? (
+                <View style={{ padding: 16 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#1f2937', marginBottom: 10 }}>✏️ Editar mensaje</Text>
+                  <TextInput
+                    value={textoEdicionAdmin}
+                    onChangeText={setTextoEdicionAdmin}
+                    multiline
+                    autoFocus
+                    style={{
+                      backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
+                      padding: 12, fontSize: 14, lineHeight: 20, color: '#1f2937', height: 360, textAlignVertical: 'top',
+                    } as any}
+                  />
+                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
+                    Se cambia para todos. En el chat queda la marca de editado.
+                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                    <TouchableOpacity onPress={() => setTextoEdicionAdmin(null)} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#6b7280' }}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={guardarEdicionAdmin}
+                      disabled={guardandoEdicionAdmin}
+                      style={{ backgroundColor: '#880E4F', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 20, opacity: guardandoEdicionAdmin ? 0.6 : 1 }}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>{guardandoEdicionAdmin ? 'Guardando…' : 'Guardar'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (<>
               <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
                 <Text style={{ fontSize: 11, fontWeight: '800', color: '#AD1457' }}>
                   {menuMensaje?.autor}{menuMensaje ? ' · ' + fechaCorta(menuMensaje.created_at) : ''}
@@ -12117,6 +12177,18 @@ setBulkWhatsAppPending(pending);
               >
                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937' }}>📋 Copiar mensaje</Text>
               </TouchableOpacity>
+
+              {esMensajeDeNospi && !!(menuMensaje?.content || '').trim() && (
+                <TouchableOpacity
+                  onPress={() => setTextoEdicionAdmin(menuMensaje?.content || '')}
+                  style={{ paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937' }}>✏️ Editar mensaje</Text>
+                  <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                    Corrige el texto para todos. Solo en los mensajes de Nospi.
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 onPress={alternarOculto}
@@ -12149,6 +12221,7 @@ setBulkWhatsAppPending(pending);
               <TouchableOpacity onPress={() => setMenuMensaje(null)} style={{ paddingVertical: 13, alignItems: 'center' }}>
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#6b7280' }}>Cancelar</Text>
               </TouchableOpacity>
+              </>)}
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
