@@ -36,6 +36,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nospiColors } from '@/constants/Colors';
 import { toque, toqueFuerte, error as hapticoError } from '@/lib/haptics';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
 // Para los checks se usa MaterialIcons DIRECTO y no IconSymbol: el doble
@@ -86,6 +87,12 @@ import { localeDe } from '@/lib/i18n';
 const DRAFT_KEY = (id?: string) => `chat_draft_${id}`;
 
 const NOSPI_SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000099';
+// La cuenta de Nospi con la que se publica en el canal y se entra al admin.
+// Su chat privado NO es un canal de soporte: el 19 de noviembre de 2026 habia
+// mensajes de usuarios ahi sin responder desde hacia semanas, porque nadie lo
+// revisa. Quien lo abre ve un aviso con WhatsApp y correo en vez del campo de
+// escribir, y la base (puede_escribir_en_directo) tampoco deja enviar.
+const NOSPI_CUENTA_ID = '0a6fe4ae-a2dc-4a0d-a9f6-22d82bf403f1';
 
 // Bucket PRIVADO de fotos y videos del chat. No se puede abrir por URL
 // directa: cada archivo se sirve con un enlace firmado que solo se le entrega
@@ -1106,6 +1113,7 @@ export default function ChatThreadScreen() {
   const { user } = useSupabase();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { appConfig } = useAppConfig();
 
   // Con el teclado abierto sobra el hueco que se reserva para la barra de
   // navegacion del sistema: el teclado ya la tapa, y ese espacio se ve como una
@@ -3819,6 +3827,14 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
 
   const handleStartDirectChat = async (otherUserId: string) => {
     if (!otherUserId || otherUserId === user?.id) return;
+    // A la cuenta de Nospi no se le abre chat privado: ver NOSPI_CUENTA_ID.
+    if (otherUserId === NOSPI_CUENTA_ID && !isAdminUser) {
+      const wa = appConfig.support_whatsapp ? `WhatsApp: +${appConfig.support_whatsapp}` : '';
+      const mail = appConfig.support_email ? `${t('chat.correo')}: ${appConfig.support_email}` : '';
+      const texto = [t('chat.nospiEscribenos'), wa, mail].filter(Boolean).join('\n');
+      if (Platform.OS === 'web') window.alert(texto); else Alert.alert(t('chat.nospiNoRecibe'), texto);
+      return;
+    }
     // El candado va en un ref y NO en el estado. Antes el guardia era
     // `startingChatWith`, que ademas deja el boton disabled: si el RPC LANZABA
     // (sin try/catch no habia quien lo limpiara), esa variable se quedaba
@@ -3977,6 +3993,9 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
   // mucho mas arriba (esCanal) porque alla lo necesita un efecto.
   const isChannel = esCanal;
   const channelReadOnly = isChannel && !meta?.replies_open && !isAdminUser;
+  // Chat privado con la cuenta de Nospi: se lee lo que Nospi escribio, pero no
+  // se contesta por aqui. Ver NOSPI_CUENTA_ID.
+  const chatConNospiCerrado = !isAdminUser && otherParticipantId === NOSPI_CUENTA_ID;
 
   // Una solicitud sin responder. Se distingue quien la envio: a quien la
   // recibio se le muestran los botones; a quien la envio, que espere.
@@ -4870,7 +4889,32 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
 
 
 
-        {solicitudParaMi ? (
+        {chatConNospiCerrado ? (
+          <Reanimated.View style={[styles.channelLockedBar, padAviso]}>
+            <Text style={styles.channelLockedText}>{t('chat.nospiNoRecibe')}</Text>
+            <Text style={styles.solicitudEnviadaSub}>{t('chat.nospiEscribenos')}</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, justifyContent: 'center' }}>
+              {!!appConfig.support_whatsapp && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`https://wa.me/${appConfig.support_whatsapp}`).catch(() => {})}
+                  style={{ backgroundColor: '#25D366', borderRadius: 20, paddingVertical: 9, paddingHorizontal: 16 }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>WhatsApp</Text>
+                </TouchableOpacity>
+              )}
+              {!!appConfig.support_email && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`mailto:${appConfig.support_email}`).catch(() => {})}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 20, paddingVertical: 9, paddingHorizontal: 16 }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>{t('chat.correo')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Reanimated.View>
+        ) : solicitudParaMi ? (
           // Solicitud que me llego: hay que decidir antes de conversar. El campo
           // de escribir no aparece — la base tampoco dejaria enviar, y mostrar
           // un campo que no funciona es peor que no mostrarlo.
