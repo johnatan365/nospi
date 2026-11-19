@@ -2147,6 +2147,16 @@ export default function ChatThreadScreen() {
     return () => { alive = false; };
   }, [user?.id]);
 
+  // Editar es mas amplio que borrar para el equipo de Nospi: un admin corrige
+  // sus anuncios y los de "Equipo Nospi" a cualquier hora, sin los 15
+  // minutos (lo mismo valida editar_mi_mensaje en la base). Borrar sigue con
+  // la regla de sePuedeEditar para todos.
+  const sePuedeCorregir = useCallback((m: Message | null | undefined) => {
+    if (!m) return false;
+    if (isAdminUser && (m.sender_id === user?.id || m.sender_id === NOSPI_SYSTEM_USER_ID)) return true;
+    return sePuedeEditar(m);
+  }, [isAdminUser, user?.id, sePuedeEditar]);
+
   const loadEverything = useCallback(async () => {
     if (!conversationId || !user?.id) return;
 
@@ -5841,7 +5851,7 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
                 {actionMsg?.pinned_at ? t('chat.quitarDeFijados') : t('chat.fijarMensaje')}
               </Text>
             </TouchableOpacity>
-            {sePuedeEditar(actionMsg) && !!(actionMsg?.content || '').trim() && (
+            {sePuedeCorregir(actionMsg) && !!(actionMsg?.content || '').trim() && (
               <TouchableOpacity
                 style={styles.actionSheetRow}
                 onPress={() => {
