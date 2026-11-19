@@ -1540,6 +1540,9 @@ export default function ChatThreadScreen() {
   // Posicion en pantalla de la burbuja presionada, para abrir el menu JUNTO a
   // ella (como WhatsApp) en vez de pegado al fondo de la pantalla.
   const [actionAnchor, setActionAnchor] = useState<{ y: number; height: number; isMine: boolean } | null>(null);
+  // Alto real del menu de acciones, medido al pintarse. Sirve para saber si
+  // cabe junto al mensaje o si hay que centrarlo en la pantalla.
+  const [alturaMenuAcciones, setAlturaMenuAcciones] = useState(0);
   const bubbleRefs = useRef<Record<string, any>>({});
 
   // Reacciones con emoji por mensaje. Se guardan en chat_message_reactions
@@ -5718,15 +5721,38 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
                 // Ahora se mide cuanto espacio hay de cada lado y se abre hacia
                 // donde quepa; ademas se le pone un techo para que, si no cabe
                 // entero en ningun lado, se pueda desplazar en vez de cortarse.
+                //
+                // Y si el mensaje ocupa toda la pantalla (un anuncio largo del
+                // canal leido desde arriba) no queda espacio en ningun lado:
+                // antes el menu se forzaba a 200 px pegado al borde del
+                // mensaje y quedaba fuera de la pantalla, arriba, sin poder
+                // tocarse. En ese caso ahora se centra en la pantalla.
                 const margen = 8;
                 const abajo = SCREEN_H - (actionAnchor.y + actionAnchor.height) - margen;
                 const arriba = actionAnchor.y - margen;
-                return abajo >= arriba
-                  ? { top: actionAnchor.y + actionAnchor.height + margen, maxHeight: Math.max(200, abajo - 16) }
-                  : { bottom: SCREEN_H - actionAnchor.y + margen, maxHeight: Math.max(200, arriba - 16) };
+                const necesita = Math.min(alturaMenuAcciones || 260, SCREEN_H - 120);
+                if (abajo >= necesita || arriba >= necesita) {
+                  return abajo >= arriba
+                    ? { top: actionAnchor.y + actionAnchor.height + margen, maxHeight: abajo - 16 }
+                    : { bottom: SCREEN_H - actionAnchor.y + margen, maxHeight: arriba - 16 };
+                }
+                return { top: Math.max(60, (SCREEN_H - necesita) / 2), maxHeight: SCREEN_H - 120 };
               })(),
-              actionAnchor?.isMine ? { right: 12, alignItems: 'flex-end' } : { left: 12, alignItems: 'flex-start' },
+              (() => {
+                if (!actionAnchor) return { left: 12, alignItems: 'flex-start' as const };
+                const margen = 8;
+                const necesita = Math.min(alturaMenuAcciones || 260, SCREEN_H - 120);
+                const cabe = SCREEN_H - (actionAnchor.y + actionAnchor.height) - margen >= necesita
+                  || actionAnchor.y - margen >= necesita;
+                // Centrado: el contenedor ocupa todo el ancho y el menu queda en medio.
+                if (!cabe) return { left: 0, right: 0, alignItems: 'center' as const, maxWidth: 10000 };
+                return actionAnchor.isMine ? { right: 12, alignItems: 'flex-end' as const } : { left: 12, alignItems: 'flex-start' as const };
+              })(),
             ]}
+            onLayout={(e) => {
+              const h = Math.round(e.nativeEvent.layout.height);
+              if (h > 0 && Math.abs(h - alturaMenuAcciones) > 2) setAlturaMenuAcciones(h);
+            }}
           >
           {/* Barra de reacciones rapidas, los mismos 6 emojis de WhatsApp. */}
           <View style={styles.reactionBar}>

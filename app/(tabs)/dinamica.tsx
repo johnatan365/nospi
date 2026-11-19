@@ -2286,7 +2286,7 @@ export default function DinamicaScreen() {
                 </View>
               ) : appointment.event.type === 'rooftop' ? (
                 <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>
-                  <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 63, height: 52, tintColor: '#880E4F' }} resizeMode="contain" />
+                  <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 74, height: 62, tintColor: '#880E4F' }} resizeMode="contain" />
                 </View>
             ) : appointment.event.type === 'bar' ? (
               <View style={[CAJA_ICONO, { width: 93, height: 78, borderRadius: 22, marginRight: 12 }]}>

@@ -543,7 +543,7 @@ export default function AppointmentsScreen() {
                       </View>
                     ) : eventType === 'rooftop' ? (
                       <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>
-                        <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 54, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
+                        <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 64, height: 56, tintColor: '#880E4F' }} resizeMode="contain" />
                       </View>
                     ) : eventType === 'bar' ? (
                       <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>

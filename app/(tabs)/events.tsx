@@ -347,7 +347,7 @@ export default function EventsScreen() {
                         </View>
                       ) : event.type === 'rooftop' ? (
                         <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
-                          <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
+                          <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 64, height: 55, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bar' ? (
                         <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
