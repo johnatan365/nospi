@@ -5051,7 +5051,15 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
       {/* Editar un mensaje propio. Se abre despues de cerrar el menu de
           acciones, nunca al tiempo: en iOS dos <Modal> a la vez no funcionan. */}
       <Modal visible={!!editando} animationType="fade" transparent onRequestClose={() => setEditando(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 22 }}>
+        {/* Un anuncio largo del canal no se puede corregir en una caja de 3
+            renglones. Si el texto es largo la caja crece a un 30% de la
+            pantalla y la tarjeta sube arriba, para que el teclado no tape el
+            boton Guardar (no hay KeyboardAvoidingView en este modal). */}
+        <View style={{
+          flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', padding: 22,
+          justifyContent: textoEdicion.length > 150 ? 'flex-start' : 'center',
+          paddingTop: textoEdicion.length > 150 ? insets.top + 40 : 22,
+        }}>
           <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: '#1f2937', marginBottom: 10 }}>
               Editar mensaje
@@ -5065,6 +5073,7 @@ video{width:100%;height:100%;object-fit:contain;display:block}</style>
                 backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0',
                 borderRadius: 12, padding: 12, fontSize: 15, color: '#1a1a1a',
                 minHeight: 90, maxHeight: 200, textAlignVertical: 'top',
+                ...(textoEdicion.length > 150 ? { height: SCREEN_H * 0.3, maxHeight: SCREEN_H * 0.3 } : {}),
               }}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
