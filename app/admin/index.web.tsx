@@ -470,6 +470,29 @@ const BLOQUE_INSTALAR_MISMO_DIA = [
 // push. OJO: este default ya decia 15 pero las dos llamadas pasaban 10, asi que
 // el WhatsApp anunciaba una hora y la app abria diez minutos despues. No volver
 // a pasar el minutaje en la llamada: el numero vive aqui y en ningun otro lado.
+// Las horas de los eventos son SIEMPRE hora Colombia, sin importar en que
+// pais este el computador desde el que se abre el admin. Antes el formulario
+// leia y guardaba la hora con la zona del navegador: editando desde Mexico,
+// abrir un evento de las 9:00 p.m. mostraba 8:00 (o 6:00) y al guardar ese
+// texto quedaba como la hora que ven los participantes, aunque solo se
+// hubiera cambiado el lugar o la descripcion. Paso con el Cafe del 21, el
+// Baile del 22, la Alborada del 30 y la Videollamada del 25 de noviembre.
+const ZONA_EVENTOS = 'America/Bogota';
+
+function fechaHoraColombia(iso: string): { fecha: string; hora: string } {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONA_EVENTOS, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso));
+  const v = (t: string) => partes.find((p) => p.type === t)?.value || '';
+  return { fecha: `${v('year')}-${v('month')}-${v('day')}`, hora: `${v('hour')}:${v('minute')}` };
+}
+
+// Colombia no tiene horario de verano: siempre es UTC-5.
+function fechaDesdeHoraColombia(fecha: string, hora: string): Date {
+  return new Date(`${fecha}T${hora}:00-05:00`);
+}
+
 function restarMinutos(time24?: string, minutos: number = 15): string {
   const m = /^(\d{1,2}):(\d{2})/.exec((time24 || '').trim());
   if (!m) return '';
@@ -3913,8 +3936,13 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
   };
 
   const [dateToBeDefined, setDateToBeDefined] = useState(false);
+  // Fecha y hora (Colombia) con que se abrio el evento al editarlo. Si al
+  // guardar siguen iguales, no se envian: la hora del evento solo cambia
+  // cuando alguien la cambia a proposito en el formulario.
+  const fechaHoraOriginalRef = useRef<{ date: string; time: string; toBeDefined: boolean } | null>(null);
 
   const openCreateEventModal = () => {
+    fechaHoraOriginalRef.current = null;
     setDateToBeDefined(false);
     setEditingEventId(null);
     setEventForm({
@@ -3966,22 +3994,16 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       // la fecha en UTC) — si no, un evento a las 7pm en Bogotá (UTC-5) se
       // guarda como medianoche UTC del día siguiente, y al editar se mostraba
       // un día adelantado aunque la hora sí salía correcta.
-      const startDate = new Date(event.start_time);
-      const yyyy = startDate.getFullYear();
-      const mm = (startDate.getMonth() + 1).toString().padStart(2, '0');
-      const dd = startDate.getDate().toString().padStart(2, '0');
-      dateValue = `${yyyy}-${mm}-${dd}`;
-      const hours = startDate.getHours().toString().padStart(2, '0');
-      const minutes = startDate.getMinutes().toString().padStart(2, '0');
-      timeValue = `${hours}:${minutes}`;
+      // Siempre en hora Colombia (ver fechaHoraColombia): con getHours() salia
+      // la hora del computador, y en otro pais quedaba corrida.
+      const enColombia = fechaHoraColombia(event.start_time);
+      dateValue = enColombia.fecha;
+      timeValue = enColombia.hora;
     } else if (event.date && event.time) {
-      const startDate = new Date(event.date);
-      const yyyy = startDate.getFullYear();
-      const mm = (startDate.getMonth() + 1).toString().padStart(2, '0');
-      const dd = startDate.getDate().toString().padStart(2, '0');
-      dateValue = `${yyyy}-${mm}-${dd}`;
+      dateValue = fechaHoraColombia(event.date).fecha;
       timeValue = event.time;
     }
+    fechaHoraOriginalRef.current = { date: dateValue, time: timeValue, toBeDefined: !event.date };
     
     setEventForm({
       name: event.name || '',
@@ -4343,8 +4365,8 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
         return;
       }
 
-      const combinedDateString = `${eventForm.date}T${eventForm.time}:00`;
-      const combinedDate = new Date(combinedDateString);
+      // La hora escrita en el formulario es hora Colombia, no la del computador.
+      const combinedDate = fechaDesdeHoraColombia(eventForm.date, eventForm.time);
 
       if (!dateToBeDefined && isNaN(combinedDate.getTime())) {
         window.alert('Fecha u hora inválida.');
@@ -4409,10 +4431,20 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
       };
 
 
+      // Editar el nombre, el lugar o la descripcion no puede mover la hora: si
+      // la fecha y la hora siguen como se abrieron, ni se mandan.
+      const original = fechaHoraOriginalRef.current;
+      const horaSinTocar = !!editingEventId && !!original
+        && original.date === eventForm.date
+        && original.time === eventForm.time
+        && original.toBeDefined === dateToBeDefined;
+      const { date: _date, time: _time, start_time: _startTime, ...eventDataSinHora } = eventData;
+      const payloadUpdate = horaSinTocar ? eventDataSinHora : eventData;
+
       if (editingEventId) {
         const { data, error } = await supabase
           .from('events')
-          .update(eventData)
+          .update(payloadUpdate)
           .eq('id', editingEventId)
           .select();
 
