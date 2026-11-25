@@ -427,8 +427,8 @@ export default function AppointmentsScreen() {
               if (!appointment.event) return null;
 
               const eventType = appointment.event.type || 'restaurant';
-              const eventTypeText = t(['bar', 'baile', 'karaoke', 'rooftop', 'caminata', 'cafe', 'bolos', 'virtual'].includes(eventType) ? `evento.tipo.${eventType}` : 'evento.tipo.restaurante');
-              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : eventType === 'karaoke' ? '🎤' : eventType === 'rooftop' ? '🌃' : '🍽️';
+              const eventTypeText = t(['bar', 'baile', 'karaoke', 'rooftop', 'escape', 'caminata', 'cafe', 'bolos', 'virtual'].includes(eventType) ? `evento.tipo.${eventType}` : 'evento.tipo.restaurante');
+              const eventIcon = eventType === 'bar' ? '🍸' : eventType === 'caminata' ? '🚶' : eventType === 'cafe' ? '☕' : eventType === 'bolos' ? '🎳' : eventType === 'virtual' ? '🎥' : eventType === 'baile' ? '💃' : eventType === 'karaoke' ? '🎤' : eventType === 'rooftop' ? '🌃' : eventType === 'escape' ? '🔐' : '🍽️';
               const eventName = nombreEventoIdioma(appointment.event, idioma, t) || eventTypeText;
               const eventCity = appointment.event.city || '';
               const eventDate = appointment.event.date || '';
@@ -544,6 +544,10 @@ export default function AppointmentsScreen() {
                     ) : eventType === 'rooftop' ? (
                       <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>
                         <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 64, height: 56, tintColor: '#880E4F' }} resizeMode="contain" />
+                      </View>
+                    ) : eventType === 'escape' ? (
+                      <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>
+                        <Image source={require('@/assets/images/icon-escape.png')} style={{ width: 54, height: 47, tintColor: '#880E4F' }} resizeMode="contain" />
                       </View>
                     ) : eventType === 'bar' ? (
                       <View style={[CAJA_ICONO, { width: 80, height: 69, borderRadius: 20, marginRight: 12 }]}>

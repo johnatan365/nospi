@@ -374,7 +374,7 @@ export default function EventsScreen() {
                 <Text style={styles.sectionHeader}>{t(CLAVE_SECCION[section] ?? 'eventos.sinFecha')}</Text>
 
                 {sectionEvents.map((event) => {
-                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : event.type === 'karaoke' ? '🎤' : event.type === 'rooftop' ? '🌃' : '🍽️';
+                  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : event.type === 'karaoke' ? '🎤' : event.type === 'rooftop' ? '🌃' : event.type === 'escape' ? '🔐' : '🍽️';
                   const compactDate = formatCompactDate(event.date);
                   const hasRevealedLocation = event.is_location_revealed && (event.location_name || event.location);
                   const esVirtual = event.type === 'virtual';
@@ -405,6 +405,10 @@ export default function EventsScreen() {
                       ) : event.type === 'rooftop' ? (
                         <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
                           <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 64, height: 55, tintColor: '#880E4F' }} resizeMode="contain" />
+                        </View>
+                      ) : event.type === 'escape' ? (
+                        <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>
+                          <Image source={require('@/assets/images/icon-escape.png')} style={{ width: 54, height: 46, tintColor: '#880E4F' }} resizeMode="contain" />
                         </View>
                       ) : event.type === 'bar' ? (
                         <View style={[CAJA_ICONO, { width: 79, height: 68, borderRadius: 20, marginRight: 12 }]}>

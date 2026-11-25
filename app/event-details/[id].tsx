@@ -429,8 +429,8 @@ export default function EventDetailsScreen() {
     );
   }
 
-  const eventTypeText = t(['bar', 'baile', 'karaoke', 'rooftop', 'caminata', 'cafe', 'bolos', 'virtual'].includes(event.type) ? `evento.tipo.${event.type}` : 'evento.tipo.restaurante');
-  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : event.type === 'karaoke' ? '🎤' : event.type === 'rooftop' ? '🌃' : '🍽️';
+  const eventTypeText = t(['bar', 'baile', 'karaoke', 'rooftop', 'escape', 'caminata', 'cafe', 'bolos', 'virtual'].includes(event.type) ? `evento.tipo.${event.type}` : 'evento.tipo.restaurante');
+  const eventIcon = event.type === 'bar' ? '🍸' : event.type === 'caminata' ? '🚶' : event.type === 'cafe' ? '☕' : event.type === 'bolos' ? '🎳' : event.type === 'virtual' ? '🎥' : event.type === 'baile' ? '💃' : event.type === 'karaoke' ? '🎤' : event.type === 'rooftop' ? '🌃' : event.type === 'escape' ? '🔐' : '🍽️';
   const esVirtual = event.type === 'virtual';
   const dateText = formatDate(event.date);
   // Los eventos son de hombres y mujeres. El cierre de registro por genero
@@ -481,6 +481,10 @@ export default function EventDetailsScreen() {
             ) : event.type === 'rooftop' ? (
               <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
                 <Image source={require('@/assets/images/icon-rooftop.png')} style={{ width: 138, height: 117, tintColor: '#880E4F' }} resizeMode="contain" />
+              </View>
+            ) : event.type === 'escape' ? (
+              <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
+                <Image source={require('@/assets/images/icon-escape.png')} style={{ width: 118, height: 100, tintColor: '#880E4F' }} resizeMode="contain" />
               </View>
             ) : event.type === 'bar' ? (
               <View style={[CAJA_ICONO, { width: 173, height: 147, borderRadius: 33, marginBottom: 12 }]}>
@@ -732,6 +736,8 @@ export default function EventDetailsScreen() {
                   <Image source={require('@/assets/images/icon-karaoke.png')} style={styles.ticketIcon} resizeMode="contain" />
                 ) : event?.type === 'rooftop' ? (
                   <Image source={require('@/assets/images/icon-rooftop.png')} style={styles.ticketIcon} resizeMode="contain" />
+                ) : event?.type === 'escape' ? (
+                  <Image source={require('@/assets/images/icon-escape.png')} style={styles.ticketIcon} resizeMode="contain" />
                 ) : event?.type === 'bar' ? (
                   <Image source={require('@/assets/images/icon-bar.png')} style={styles.ticketIcon} resizeMode="contain" />
                 ) : event?.type === 'restaurante' ? (
