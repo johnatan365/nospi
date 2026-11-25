@@ -7695,18 +7695,37 @@ const handleDeletePaymentAttempt = async (paymentAttemptId: string) => {
                     );
                   })}
                 </ScrollView>
-                <View style={{ flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF' }}>
-                  <TextInput
-                    style={{ flex: 1, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13, fontSize: 12.5 }}
-                    placeholder="Escribe como Equipo Nospi…"
-                    value={channelDraft}
-                    onChangeText={setChannelDraft}
-                    onSubmitEditing={sendChannelMessage}
-                  />
+                {/* Caja de varias lineas. Antes era un input de una sola linea
+                    con onSubmitEditing: borraba los saltos de linea y Enter
+                    enviaba. Los anuncios del canal van por parrafos (fecha,
+                    precio, cupos, cada uno en su renglon), asi que el 25 de
+                    noviembre de 2026 el del Escape Room hubo que meterlo por
+                    SQL para no mandarlo como un solo bloque. Ahora Enter es un
+                    salto de linea y se envia con el boton o con Ctrl/Cmd+Enter. */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF' }}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      multiline
+                      style={{ backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 13, fontSize: 12.5, lineHeight: 18, minHeight: 36, height: Math.min(220, Math.max(36, 18 * (channelDraft.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 70)), 0) + 1))), textAlignVertical: 'top' } as any}
+                      placeholder="Escribe como Equipo Nospi…"
+                      value={channelDraft}
+                      onChangeText={setChannelDraft}
+                      onKeyPress={(e: any) => {
+                        const ne = e?.nativeEvent || {};
+                        if (ne.key === 'Enter' && (ne.metaKey || ne.ctrlKey)) {
+                          e.preventDefault?.();
+                          sendChannelMessage();
+                        }
+                      }}
+                    />
+                    <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3, marginLeft: 6 }}>
+                      Enter = nueva línea · Ctrl/⌘ + Enter = enviar
+                    </Text>
+                  </View>
                   <TouchableOpacity
                     onPress={sendChannelMessage}
                     disabled={sendingChannel || !channelDraft.trim()}
-                    style={{ backgroundColor: '#880E4F', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, opacity: sendingChannel || !channelDraft.trim() ? 0.5 : 1 }}
+                    style={{ backgroundColor: '#880E4F', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, marginBottom: 17, opacity: sendingChannel || !channelDraft.trim() ? 0.5 : 1 }}
                   >
                     <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>
                       {sendingChannel ? '…' : 'Enviar'}
